@@ -56,7 +56,7 @@ class DataUtils:
     def get_results_file_path(self, graph_path: str) -> str:
         return os.path.join(graph_path, "results.json")
 
-    def create_result_data(self, round: int, score: float, avg_cost, total_cost, token) -> dict:
+    def create_result_data(self, round: int, score: float, avg_cost=None, total_cost=None, token=None) -> dict:
         now = datetime.datetime.now()
         return {"round": round, "score": score, "avg_cost": avg_cost, "total_cost": total_cost, "token": token, "time": now}
 

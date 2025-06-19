@@ -1,7 +1,13 @@
-import argparse
+import argparse, os
 from maas.configs.models_config import ModelsConfig
 from maas.ext.maas.scripts.optimizer import Optimizer
 from maas.ext.maas.benchmark.experiment_configs import EXPERIMENT_CONFIGS
+
+
+def get_envvar_key(llm_config):
+    # if llm_config.api_key == "ENV":
+    return os.getenv("OPENAI_API_KEY")
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MAAS Optimizer")
@@ -57,6 +63,9 @@ if __name__ == "__main__":
             f"The execution model '{args.exec_model_name}' was not found in the 'models' section of the configuration file. "
             "Please add it to the configuration file or specify a valid model using the --exec_model_name flag. "
         )
+
+    opt_llm_config.api_key = get_envvar_key(opt_llm_config)
+    exec_llm_config.api_key = get_envvar_key(exec_llm_config)
 
     optimizer = Optimizer(
         dataset=config.dataset, 

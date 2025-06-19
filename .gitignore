@@ -1,0 +1,15 @@
+.venv/*
+***.DS_Store
+**.pyc
+**.jsonl
+__pycache__/*
+**log.json
+**results.json
+logs/
+maas/ext/maas/scripts/optimized/**/*.csv
+maas/ext/maas/scripts/optimized/**/*.pth
+tester.txt
+error.log
+config/*.yaml
+debug/
+debug/*
