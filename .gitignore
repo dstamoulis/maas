@@ -13,3 +13,7 @@ error.log
 config/*.yaml
 debug/
 debug/*
+yosys_runs/
+yosys_runs/*
+**.v
+**.ys

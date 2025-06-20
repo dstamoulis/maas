@@ -1,0 +1,92 @@
+import re, json
+import numpy as np
+
+def savefile(filename, content, fmode='w'):
+    with open(filename, fmode) as f:
+        f.write(content)
+
+def rename_modules_and_instantiations(verilog_code):
+    # Step 1: Find all module names (including those with parameters using #(...))
+    module_pattern = re.compile(r'\bmodule\s+(\w+)\s*(?:#\s*\(.*?\))?\s*\(', re.DOTALL)
+    module_names = module_pattern.findall(verilog_code)
+
+    # Step 2: Create a mapping from old to new names
+    rename_map = {name: name + '1' for name in module_names}
+
+    # Step 3: Replace module declarations
+    def replace_module_decl(match):
+        original_name = match.group(1)
+        before = match.group(0)
+        return before.replace(original_name, rename_map[original_name], 1)
+
+    verilog_code = module_pattern.sub(replace_module_decl, verilog_code)
+
+    # Step 4: Replace module instantiations (word boundaries)
+    for old_name, new_name in rename_map.items():
+        instantiation_pattern = re.compile(rf'\b{old_name}\b')
+        verilog_code = instantiation_pattern.sub(new_name, verilog_code)
+
+    return verilog_code, rename_map
+
+def extract_code_block(text):
+    if not text:
+        return ""
+    pattern = r"CODE BEGIN(.*?)CODE END"
+    matches = re.findall(pattern, text, re.DOTALL)
+    if matches:
+        s = matches[-1]  # take the last match
+    else:
+        s = ""
+    return s
+
+
+def extract_modules(verilog_text):
+    # This regex matches everything from 'module' to the nearest 'endmodule'
+    pattern = r'\bmodule\b.*?\bendmodule\b'
+    matches = re.findall(pattern, verilog_text, re.DOTALL)
+    # Combine them into a single string, each separated by a newline
+    combined_modules = '\n\n'.join(matches)
+    return combined_modules
+
+def parsing_helper(verilog_text, reasoning_mode):
+    if reasoning_mode:
+        parse1 = extract_code_block(verilog_text)
+        if parse1 == '':
+            parse1 = extract_modules(verilog_text)
+            if parse1 == '':
+                parse1 = verilog_text
+    else:
+        parse1 = extract_modules(verilog_text)
+        if parse1 == '':
+            parse1 = verilog_text
+    return parse1
+
+
+def load_json(filename):
+    des_data = []
+    with open(filename, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            des_data.append(data)
+    return des_data
+
+def load_jsonl(file_path):
+    data = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            item = json.loads(line.strip())
+            data.append(item)
+    return data
+
+def pass_at_k(c_list, n, k):
+    pass_at_k_values = []
+    for c in c_list:
+        if c == 0:
+            pass_at_k_values.append(0.0)
+        else:
+            if n == k:
+                pass_at_k_values.append(1.0 if c > 0 else 0.0)
+            else:
+                val = 1 - comb(n - c, k) / comb(n, k) if (n - c) >= k else 1.0
+                pass_at_k_values.append(val)
+    return np.mean(pass_at_k_values)
