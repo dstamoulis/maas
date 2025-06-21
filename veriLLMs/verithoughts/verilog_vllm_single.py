@@ -24,6 +24,8 @@ api_client = OpenAI(
 
 from verithoughts_utils import extract_code_block
 
+reasoning_models = ['Qwen/Qwen3'] # hardcoded!
+
 # OpenAI-compatible API service with vLLM
 def vllm_get_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, enable_reasoning=False):
 
@@ -35,7 +37,7 @@ def vllm_get_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, enab
     _extra_body_params={
         "top_k": 20,
     }
-    if not enable_reasoning:
+    if not enable_reasoning and any(model_name.startswith(prefix) for prefix in reasoning_models):
         _extra_body_params["chat_template_kwargs"]= {"enable_thinking": False}
     response = api_client.chat.completions.create(
         model=model_name,
