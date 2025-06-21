@@ -12,13 +12,14 @@ from copy import deepcopy
 from datasets import load_dataset
 
 from openai import OpenAI
-api_client = OpenAI()
+# Set OpenAI's API key and API base to use vLLM's API server.
+openai_api_key = "EMPTY"
+openai_api_base = "http://localhost:8000/v1"
 
 from verithoughts_utils import extract_code_block
 
-
-# Chat Completion API
-def gpt_get_response(query, model_name="gpt-4o-mini", temperature=0.6):
+# OpenAI-compatible API service with vLLM
+def gpt_get_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6):
 
     # start_time = time.time()
     messages = [
@@ -28,18 +29,20 @@ def gpt_get_response(query, model_name="gpt-4o-mini", temperature=0.6):
     response = api_client.chat.completions.create(
         model=model_name,
         messages=messages,
-        temperature=temperature,
+        max_tokens=32768,
+        temperature=0.6,
+        top_p=0.95,
     )
     # elapsed_time = round(time.time() - start_time, 4)
     return response.choices[0].message.content
 
 parser = argparse.ArgumentParser(description="Arg Parse")
-parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="HF model name")
+parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-7B", help="HF model name")
 parser.add_argument("--num_samples_per_task", type=int, default=1, help="Number of samples per question")
 parser.add_argument("--reasoning_mode", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
 parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
 parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
-parser.add_argument("--max_tokens", type=int, default=16384, help="Max tokens")
+parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens")
 args = parser.parse_args()
 
 # based on what's hardcoded in verilog_vllm!
