@@ -36,7 +36,7 @@ def gpt_get_response(query, model_name="gpt-4o-mini", temperature=0.6):
 parser = argparse.ArgumentParser(description="Arg Parse")
 parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="HF model name")
 parser.add_argument("--num_samples_per_task", type=int, default=1, help="Number of samples per question")
-parser.add_argument("--reasoning_mode", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
 parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
 parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
 parser.add_argument("--max_tokens", type=int, default=16384, help="Max tokens")
@@ -49,7 +49,7 @@ max_tokens=16384
 
 model_name = args.model_name
 num_samples_per_task = args.num_samples_per_task
-reasoning_mode = args.reasoning_mode
+enable_reasoning = args.enable_reasoning
 
 # NO! benchmark_data = load_json(args.benchmark_path)
 # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -71,7 +71,8 @@ verified_benchmark_dict_list = []
 for data in benchmark_data:
     if not data['verified']: continue
     for _ in range(num_samples_per_task):
-        qdata = data['question'] + INSTR_REASONING if reasoning_mode else data['question'] + INSTR_SIMPLE
+        # qdata = data['question'] + INSTR_REASONING if enable_reasoning else data['question'] + INSTR_SIMPLE
+        qdata = data['question'] + INSTR_SIMPLE
         question_list.append(qdata)
         verified_benchmark_dict_list.append(data)
     # break
