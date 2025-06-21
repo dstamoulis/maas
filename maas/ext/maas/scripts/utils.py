@@ -189,7 +189,7 @@ test_check()
     return tester_function
 
 
-def extract_verilog_code_block(text):
+def extract_verilog_code_block_depr(text): # THEIR CODE: BUGGY! FAILS to catch ```verilog``` fences!!
     if not text:
         return ""
     pattern = r"CODE BEGIN(.*?)CODE END"
@@ -199,6 +199,39 @@ def extract_verilog_code_block(text):
     else:
         s = text # Return raw (since might be already extracted!)
     return s
+
+
+# this adapts our ActionNode MaAS sanitizer
+# maas.actions.action_node: def verilog_fill
+def extract_verilog_code_block(content: str) -> str:
+    """
+    Extract the last ```verilog``` fenced block if present,
+    and/or catch the last CODE BEGIN … CODE END block (which could be present with or without fences),
+    or finally everything if neither is found.
+    """
+    if not content:
+        return ""
+    code = content.strip()
+    # 1) If there are any ```verilog … ``` fences, grab the *last* inner chunk
+    fences = re.findall(r"```(?:verilog)?\s*(.*?)```", content, re.DOTALL | re.IGNORECASE)
+    if fences:
+        code = fences[-1].strip()
+
+    # # 2) Now, within that (or within the raw content if no fences), look for CODE BEGIN/END
+    # blocks = re.findall(r"CODE BEGIN(.*?)CODE END", code, re.DOTALL | re.IGNORECASE)
+    # if blocks:
+    #     code = blocks[-1].strip()
+
+    # 2) Then last CODE BEGIN…CODE END wins (with or without “// ”)
+    blocks = re.findall(
+        r"(?://\s*)?CODE\s+BEGIN(.*?)(?://\s*)?CODE\s+END",
+        code, re.IGNORECASE | re.DOTALL
+    )
+    if blocks:
+        code = blocks[-1].strip()
+
+    return code
+
 
 def save_verilogfile(filename, content, fmode='w'):
     with open(filename, fmode) as f:
