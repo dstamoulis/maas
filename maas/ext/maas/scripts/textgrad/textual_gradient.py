@@ -6,6 +6,8 @@ import openai
 import yaml
 from pathlib import Path
 
+# TODO: Might need to add VeriThoughts info below!!! Not sure if/how we'll use TextGrad!
+
 from maas.ext.maas.scripts.textgrad.prompt_humaneval import get_init_archive_humaneval, get_prompt_humaneval
 from maas.ext.maas.scripts.textgrad.prompt_gsm8k import get_init_archive_gsm8k, get_prompt_gsm8k
 from maas.ext.maas.scripts.textgrad.prompt_math import get_init_archive_math, get_prompt_math

@@ -45,6 +45,7 @@ class FillMode(Enum):
     CODE_FILL = "code_fill"
     XML_FILL = "xml_fill"
     SINGLE_FILL = "single_fill"
+    VERILOG_FILL = "verilog_fill"
 
 
 LANGUAGE_CONSTRAINT = "Language: Please use the same language as Human INPUT."
@@ -483,9 +484,9 @@ class ActionNode:
         example_str = "\n".join(examples)
         # Add the example to the context
         context += f"""
-### Response format (must be strictly followed): All content must be enclosed in the given XML tags, ensuring each opening <tag> has a corresponding closing </tag>, with no incomplete or self-closing tags allowed.\n
-{example_str}
-"""
+        ### Response format (must be strictly followed): All content must be enclosed in the given XML tags, ensuring each opening <tag> has a corresponding closing </tag>, with no incomplete or self-closing tags allowed.\n
+        {example_str}
+        """
         return context
 
     async def code_fill(
@@ -551,6 +552,40 @@ class ActionNode:
 
         return extracted_data
 
+
+    async def verilog_fill(
+        self, context: str, timeout: int = USE_CONFIG_TIMEOUT
+    ) -> dict[str, str]:
+        """
+        Extract the last ```verilog``` fenced block if present,
+        and/or catch the last CODE BEGIN … CODE END block (which could be present with or without fences),
+        or finally everything if neither is found.
+        """
+        field_name = self.get_field_name()
+        content = await self.llm.aask(context, timeout=timeout)
+
+        code = content.strip()
+        # 1) If there are any ```verilog … ``` fences, grab the *last* inner chunk
+        fences = re.findall(r"```(?:verilog)?\s*(.*?)```", content, re.DOTALL | re.IGNORECASE)
+        if fences:
+            code = fences[-1].strip()
+
+        # # 2) Now, within that (or within the raw content if no fences), look for CODE BEGIN/END
+        # blocks = re.findall(r"CODE BEGIN(.*?)CODE END", code, re.DOTALL | re.IGNORECASE)
+        # if blocks:
+        #     code = blocks[-1].strip()
+
+        # 2) Then last CODE BEGIN…CODE END wins (with or without “// ”)
+        blocks = re.findall(
+            r"(?://\s*)?CODE\s+BEGIN(.*?)(?://\s*)?CODE\s+END",
+            code, re.IGNORECASE | re.DOTALL
+        )
+        if blocks:
+            code = blocks[-1].strip()
+
+        return {field_name: code}
+
+
     async def fill(
         self,
         context,
@@ -601,6 +636,11 @@ class ActionNode:
 
         elif mode == FillMode.SINGLE_FILL.value:
             result = await self.single_fill(context, images=images)
+            self.instruct_content = self.create_class()(**result)
+            return self
+
+        elif mode == FillMode.VERILOG_FILL.value:
+            result = await self.verilog_fill(context, timeout)
             self.instruct_content = self.create_class()(**result)
             return self
 

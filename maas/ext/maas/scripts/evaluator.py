@@ -3,9 +3,9 @@ from maas.ext.maas.benchmark.benchmark import BaseBenchmark
 from maas.ext.maas.benchmark.gsm8k import GSM8KBenchmark
 from maas.ext.maas.benchmark.humaneval import HumanEvalBenchmark
 from maas.ext.maas.benchmark.math import MATHBenchmark
+from maas.ext.maas.benchmark.verithoughts import VeriThoughtsBenchmark
 
-DatasetType = Literal["HumanEval", "GSM8K", "MATH"]
-
+DatasetType = Literal["HumanEval", "GSM8K", "MATH", "VeriThoughts"]
 
 class Evaluator:
     def __init__(self, eval_path: str, batch_size: int):
@@ -15,6 +15,7 @@ class Evaluator:
             "GSM8K": GSM8KBenchmark,
             "MATH": MATHBenchmark,
             "HumanEval": HumanEvalBenchmark,
+            "VeriThoughts": VeriThoughtsBenchmark,
         }
 
     async def graph_evaluate(

@@ -22,4 +22,10 @@ EXPERIMENT_CONFIGS: Dict[str, ExperimentConfig] = {
         question_type="code",
         operators=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop"],
     ),
+    "VeriThoughts": ExperimentConfig(
+        dataset="VeriThoughts",
+        question_type="code",
+        # operators=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop"],
+        operators=["Generate"],
+    ),
 }

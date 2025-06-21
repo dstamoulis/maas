@@ -38,6 +38,7 @@ class Optimizer:
         batch_size: int = 4,
         lr: float = 0.01,
         is_textgrad: bool = False,
+        num_layers: int = 4,
     ) -> None:
         self.optimize_llm_config = opt_llm_config
         self.execute_llm_config = exec_llm_config
@@ -57,7 +58,8 @@ class Optimizer:
         self.experience_utils = ExperienceUtils(self.root_path)
         self.evaluation_utils = EvaluationUtils(self.root_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.controller = MultiLayerController(device=self.device).to(self.device)
+        self.num_layers = num_layers
+        self.controller = MultiLayerController(num_layers=self.num_layers, device=self.device).to(self.device)
         
         self.optimizer = torch.optim.Adam(self.controller.parameters(), lr=self.lr)          
 

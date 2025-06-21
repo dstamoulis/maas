@@ -10,6 +10,7 @@ from collections import Counter
 class CodeDataset(Enum):
     HUMAN_EVAL = "HumanEval"
     MBPP = "MBPP"
+    VERITHOUGHTS = "VeriThoughts"
 
 def extract_random_prompt(log_path: str):
     parent_dir = os.path.dirname(log_path)
@@ -102,6 +103,10 @@ def extract_test_cases_from_jsonl(entry_point: str, dataset: CodeDataset = CodeD
             "sort_sublists": "",
             "unique_sublists": "",
         }
+    elif dataset == CodeDataset.VERITHOUGHTS.value:
+        file_path = "maas/ext/maas/data/verithoughts_public_test.jsonl"
+        hardcoded_cases = {} # TODO: VeriThoughts doesn't have that!!
+
     # Check if there are hardcoded test cases
     if entry_point in hardcoded_cases:
         return hardcoded_cases[entry_point]
@@ -182,3 +187,46 @@ def test_check():
 test_check()
 """
     return tester_function
+
+
+def extract_verilog_code_block(text):
+    if not text:
+        return ""
+    pattern = r"CODE BEGIN(.*?)CODE END"
+    matches = re.findall(pattern, text, re.DOTALL)
+    if matches:
+        s = matches[-1]  # take the last match
+    else:
+        s = text # Return raw (since might be already extracted!)
+    return s
+
+def save_verilogfile(filename, content, fmode='w'):
+    with open(filename, fmode) as f:
+        f.write(content)
+
+def clear_verilogfile(filename):
+    if os.path.exists(filename): 
+        os.remove(filename)
+
+def rename_modules_and_instantiations(verilog_code):
+    # Step 1: Find all module names (including those with parameters using #(...))
+    module_pattern = re.compile(r'\bmodule\s+(\w+)\s*(?:#\s*\(.*?\))?\s*\(', re.DOTALL)
+    module_names = module_pattern.findall(verilog_code)
+
+    # Step 2: Create a mapping from old to new names
+    rename_map = {name: name + '1' for name in module_names}
+
+    # Step 3: Replace module declarations
+    def replace_module_decl(match):
+        original_name = match.group(1)
+        before = match.group(0)
+        return before.replace(original_name, rename_map[original_name], 1)
+
+    verilog_code = module_pattern.sub(replace_module_decl, verilog_code)
+
+    # Step 4: Replace module instantiations (word boundaries)
+    for old_name, new_name in rename_map.items():
+        instantiation_pattern = re.compile(rf'\b{old_name}\b')
+        verilog_code = instantiation_pattern.sub(new_name, verilog_code)
+
+    return verilog_code, rename_map

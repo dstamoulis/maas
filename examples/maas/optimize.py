@@ -3,6 +3,7 @@ from maas.configs.models_config import ModelsConfig
 from maas.ext.maas.scripts.optimizer import Optimizer
 from maas.ext.maas.benchmark.experiment_configs import EXPERIMENT_CONFIGS
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def get_envvar_key(llm_config):
     # if llm_config.api_key == "ENV":
@@ -42,7 +43,10 @@ def parse_args():
     parser.add_argument("--is_test",type=bool, default=False, help="choice the optimizer mode")
     parser.add_argument("--is_textgrad", type = bool, default=False, help="choice to use textgrad")
     parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
+    parser.add_argument("--num_layers", type=int, default=4, help="number of layers in optimizer")
     return parser.parse_args()
+
+    
 
 if __name__ == "__main__":
     args = parse_args()
@@ -66,6 +70,10 @@ if __name__ == "__main__":
 
     opt_llm_config.api_key = get_envvar_key(opt_llm_config)
     exec_llm_config.api_key = get_envvar_key(exec_llm_config)
+    os.makedirs("logs/verilog_tester", exist_ok=True)
+    os.makedirs("logs/verilog_gen", exist_ok=True)
+    os.makedirs("logs/verilog_truth", exist_ok=True)
+    os.makedirs("logs/equivalence_check", exist_ok=True)
 
     optimizer = Optimizer(
         dataset=config.dataset, 
@@ -79,6 +87,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         lr=args.lr,
         is_textgrad=args.is_textgrad,
+        num_layers=args.num_layers,
     )
 
     if args.is_test:

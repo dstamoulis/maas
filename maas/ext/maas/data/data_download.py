@@ -31,6 +31,18 @@ def download_and_save(dataset):
             save_jsonl(ds_splits["test"], f"humaneval_test.jsonl")
             save_jsonl(ds_splits["test"], f"humaneval_public_test.jsonl")
 
+        # VeriThoughts
+        if dataset in ("verithoughts", "all"):
+            # The "Training" set: this is the ~10k queries: B dataset (Paper. Table 2)
+            ds = load_dataset("wilyub/VeriThoughtsTrainSetInconsistentInstructionGT", split="train")
+            ds_splits = ds.train_test_split(test_size=0.01, seed=42)
+            save_jsonl(ds_splits["test"], f"verithoughts_train.jsonl") ## HACK for quick testing! UNDO
+            save_jsonl(ds_splits["test"], f"verithoughts_test.jsonl") ## HACK for quick testing! UNDO
+
+            # The "Benchmark" set: this is the "219 queries" benchmark (Paper. Table 7)
+            ds = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+            save_jsonl(ds, f"verithoughts_public_test.jsonl")
+
     except Exception as e:
 
         print(f"[Error] {e}")
@@ -39,6 +51,6 @@ def download_and_save(dataset):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", "-d", choices=["gsm8k", "math", "humaneval", "all"], required=True,)
+    parser.add_argument("--dataset", "-d", choices=["gsm8k", "math", "humaneval", "verithoughts", "all"], required=True,)
     args = parser.parse_args()
     download_and_save(args.dataset)
