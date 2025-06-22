@@ -45,6 +45,7 @@ parser.add_argument(
 ) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
 parser.add_argument("--top_p", type=float, default=0.95, help="Top p") #Not used
 parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") #Not used
+parser.add_argument("--resume_gen", action="store_true", help="Enable if you want to continue from existing results.jsonl file")
 args = parser.parse_args()
 
 top_p = args.top_p
@@ -53,6 +54,7 @@ max_tokens=args.max_tokens
 model_name = args.model_name
 num_samples_per_task = args.num_samples_per_task
 reasoning_effort = args.reasoning_effort
+resume_gen=args.resume_gen
 
 # NO! benchmark_data = load_json(args.benchmark_path)
 # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -64,8 +66,14 @@ sub_folder = model_name if reasoning_effort == "medium" else "-".join([model_nam
 results_path = os.path.join("benchmark_results", sub_folder)
 os.makedirs(results_path, exist_ok=True)
 results_file = os.path.join(results_path, "results.jsonl")
-with open(results_file, "w") as f:
-    pass # reset! their code appends indefinitely! OMG!
+if resume_gen and os.path.exists(results_file):
+    with open(results_file, "r") as rf:
+        existing_results = json.load(rf)
+    already_done = len(existing_results)
+else:
+    already_done = 0
+    with open(results_file, "w") as f:
+        pass # reset! their code appends indefinitely! OMG!
 
 INSTR_SIMPLE = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.\n" 
 INSTR_REASONING = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.<think>\n"
@@ -83,6 +91,8 @@ for data in benchmark_data:
 
 
 for i, question in enumerate(tqdm(question_list, desc="Processing VeriThought questions")):
+    if i < already_done:
+        continue
 
     benchmark_dict = verified_benchmark_dict_list[i]
     question = question_list[i]
