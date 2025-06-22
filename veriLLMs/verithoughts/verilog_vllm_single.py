@@ -100,7 +100,7 @@ for i, question in enumerate(tqdm(question_list, desc="Processing VeriThought qu
     benchmark_dict = verified_benchmark_dict_list[i]
     question = question_list[i]
     
-    gpt_response = vllm_get_response(question, model_name, enable_reasoning)
+    gpt_response = vllm_get_response(question, model_name, temperature=temperature, enable_reasoning=enable_reasoning)
     generated_code = extract_code_block(gpt_response)
     reply_dict = {
         "question": question,

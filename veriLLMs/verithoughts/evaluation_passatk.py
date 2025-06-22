@@ -3,11 +3,11 @@ import random
 import argparse
 import os
 import re
+import shutil, sys
 import subprocess
 from math import comb
 import numpy as np
 from datasets import load_dataset
-import platform
 from tqdm import tqdm
 
 from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k
@@ -38,12 +38,10 @@ def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth):
         sat -seq 50 -verify -prove trigger 0 -show-all -show-inputs -show-outputs -set-init-zero miter
         """
         savefile(yosys_equivalence_check_file, yosys_equivalence_check_script)
-
-        if platform.system() == "Darwin": # macOS
-            full_command = ["yosys", "-s", f"{yosys_equivalence_check_file}"]
-        else:
-            full_command = ["stdbuf", "-o0", "yosys", "-s", f"{yosys_equivalence_check_file}"]
-
+        
+        # full_command = ["stdbuf", "-o0", "yosys", "-s", f"{yosys_equivalence_check_file}"] # DO NEED stdbuf!
+        full_command = ["yosys", "-s", f"{yosys_equivalence_check_file}"]
+        
         try:
             result = subprocess.run(
                 full_command,
@@ -77,6 +75,11 @@ args = parser.parse_args()
 model_name = args.model_name
 num_samples_per_task = args.num_samples_per_task
 reasoning_mode = args.reasoning_mode
+
+# 0) Pre-flight: fail fast if yosys doesn’t exist
+if shutil.which("yosys") is None:
+    sys.stderr.write("[ERROR] `yosys` not found on PATH — aborting! Make sure you export it!!\n")
+    raise SystemExit(1)
 
 # NO! parser.add_argument("--yosys_location", type=str, help="Absolute path to yosys environment.") JUST EXPORT IN PATH!!
 # NO! yosys_location = args.yosys_location
