@@ -60,7 +60,8 @@ reasoning_effort = args.reasoning_effort
 benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
 
 # Directory: benchmark_results/{model_name}/
-results_path = os.path.join("benchmark_results", model_name)
+sub_folder = model_name if reasoning_effort == "medium" else "-".join([model_name, reasoning_effort])
+results_path = os.path.join("benchmark_results", sub_folder)
 os.makedirs(results_path, exist_ok=True)
 results_file = os.path.join(results_path, "results.jsonl")
 with open(results_file, "w") as f:
@@ -86,7 +87,7 @@ for i, question in enumerate(tqdm(question_list, desc="Processing VeriThought qu
     benchmark_dict = verified_benchmark_dict_list[i]
     question = question_list[i]
     
-    gpt_response = gpt_get_response(question, model_name, reasoning_effort)
+    gpt_response = gpt_get_response(question, model_name, reasoning_effort=reasoning_effort)
     generated_code = extract_code_block(gpt_response)
     reply_dict = {
         "question": question,

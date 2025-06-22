@@ -73,7 +73,8 @@ enable_reasoning = args.enable_reasoning
 benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
 
 # Directory: benchmark_results/{model_name}/
-results_path = os.path.join("benchmark_results", model_name)
+sub_folder = model_name if not enable_reasoning else "-".join([model_name, "reasoning"])
+results_path = os.path.join("benchmark_results", sub_folder)
 os.makedirs(results_path, exist_ok=True)
 results_file = os.path.join(results_path, "results.jsonl")
 with open(results_file, "w") as f:
