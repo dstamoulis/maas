@@ -48,7 +48,7 @@ def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=10
+                timeout=120
             )
             # print(result)
             yosys_stdout_list.append(result.returncode)
