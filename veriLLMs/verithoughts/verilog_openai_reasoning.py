@@ -14,7 +14,7 @@ from datasets import load_dataset
 from openai import OpenAI
 api_client = OpenAI()
 
-from verithoughts_utils import extract_code_block
+from verithoughts_utils import extract_code_block, load_jsonl_file
 
 
 # Chat Completion API
@@ -67,8 +67,7 @@ results_path = os.path.join("benchmark_results", sub_folder)
 os.makedirs(results_path, exist_ok=True)
 results_file = os.path.join(results_path, "results.jsonl")
 if resume_gen and os.path.exists(results_file):
-    with open(results_file, "r") as rf:
-        existing_results = json.load(rf)
+    existing_results = load_jsonl_file(results_file)
     already_done = len(existing_results)
 else:
     already_done = 0

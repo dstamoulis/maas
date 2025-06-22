@@ -22,7 +22,7 @@ api_client = OpenAI(
     base_url=openai_api_base,
 )
 
-from verithoughts_utils import extract_code_block
+from verithoughts_utils import extract_code_block, load_jsonl_file
 
 reasoning_models = ['Qwen/Qwen3'] # hardcoded!
 
@@ -80,8 +80,7 @@ results_path = os.path.join("benchmark_results", sub_folder)
 os.makedirs(results_path, exist_ok=True)
 results_file = os.path.join(results_path, "results.jsonl")
 if resume_gen and os.path.exists(results_file):
-    with open(results_file, "r") as rf:
-        existing_results = json.load(rf)
+    existing_results = load_jsonl_file(results_file)
     already_done = len(existing_results)
 else:
     already_done = 0

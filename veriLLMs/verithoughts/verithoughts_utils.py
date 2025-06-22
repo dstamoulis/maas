@@ -1,6 +1,15 @@
 import re, json
 import numpy as np
 
+
+def load_jsonl_file(filename): # from original repo
+    des_data = []
+    with open(filename, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            des_data.append(data)
+    return des_data
+
 def savefile(filename, content, fmode='w'):
     with open(filename, fmode) as f:
         f.write(content)
