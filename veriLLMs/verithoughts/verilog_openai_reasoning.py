@@ -18,7 +18,7 @@ from verithoughts_utils import extract_code_block
 
 
 # Chat Completion API
-def gpt_get_response(query, model_name="gpt-4o-mini", temperature=0.6):
+def gpt_get_response(query, model_name="o4-mini", reasoning_effort="medium", top_p=0.95):
 
     # start_time = time.time()
     messages = [
@@ -27,29 +27,32 @@ def gpt_get_response(query, model_name="gpt-4o-mini", temperature=0.6):
     ]
     response = api_client.chat.completions.create(
         model=model_name,
+        reasoning_effort=reasoning_effort,
         messages=messages,
-        temperature=temperature,
     )
     # elapsed_time = round(time.time() - start_time, 4)
     return response.choices[0].message.content
 
 parser = argparse.ArgumentParser(description="Arg Parse")
-parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="OpenAI model name")
+parser.add_argument("--model_name", type=str, default="o4-mini", help="OpenAI model name")
 parser.add_argument("--num_samples_per_task", type=int, default=1, help="Number of samples per question")
-parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
-parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
-parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
-parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") # Not used
+parser.add_argument(
+    "--reasoning_effort",
+    type=str,
+    choices=["low", "medium", "high"],
+    default="medium",
+    help="How much reasoning effort to spend (one of: low, medium, high)."
+) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
+parser.add_argument("--top_p", type=float, default=0.95, help="Top p") #Not used
+parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") #Not used
 args = parser.parse_args()
 
-# # based on what's hardcoded in verilog_vllm (their repo)!
-# temperature=0.6
-# top_p = 0.95
-# max_tokens=32768
+top_p = args.top_p
+max_tokens=args.max_tokens
 
 model_name = args.model_name
 num_samples_per_task = args.num_samples_per_task
-enable_reasoning = args.enable_reasoning
+reasoning_effort = args.reasoning_effort
 
 # NO! benchmark_data = load_json(args.benchmark_path)
 # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -71,7 +74,7 @@ verified_benchmark_dict_list = []
 for data in benchmark_data:
     if not data['verified']: continue
     for _ in range(num_samples_per_task):
-        # qdata = data['question'] + INSTR_REASONING if enable_reasoning else data['question'] + INSTR_SIMPLE
+        # qdata = data['question'] + INSTR_REASONING if reasoning_effort else data['question'] + INSTR_SIMPLE # NOT used!
         qdata = data['question'] + INSTR_SIMPLE
         question_list.append(qdata)
         verified_benchmark_dict_list.append(data)
@@ -83,7 +86,7 @@ for i, question in enumerate(tqdm(question_list, desc="Processing VeriThought qu
     benchmark_dict = verified_benchmark_dict_list[i]
     question = question_list[i]
     
-    gpt_response = gpt_get_response(question, model_name)
+    gpt_response = gpt_get_response(question, model_name, reasoning_effort)
     generated_code = extract_code_block(gpt_response)
     reply_dict = {
         "question": question,

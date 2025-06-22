@@ -59,10 +59,9 @@ parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
 parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens")
 args = parser.parse_args()
 
-# based on what's hardcoded in verilog_vllm!
-temperature=0.6
-top_p = 0.95
-max_tokens=16384
+temperature=args.temperature
+top_p = args.top_p
+max_tokens=args.max_tokens
 
 model_name = args.model_name
 num_samples_per_task = args.num_samples_per_task
