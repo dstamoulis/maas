@@ -41,6 +41,7 @@ parser.add_argument("--temperature", type=float, default=0.6, help="Temperature"
 parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
 parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") # Not used
 parser.add_argument("--resume_gen", action="store_true", help="Enable if you want to continue from existing results.jsonl file")
+parser.add_argument("--use_verigrad", action="store_true", help="Enable if you want to use verigrad")
 args = parser.parse_args()
 
 temperature=args.temperature
@@ -52,6 +53,7 @@ resume_gen=args.resume_gen
 model_name = args.model_name
 num_samples_per_task = args.num_samples_per_task
 enable_reasoning = args.enable_reasoning
+use_verigrad = args.use_verigrad
 
 # NO! benchmark_data = load_json(args.benchmark_path)
 # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -59,7 +61,11 @@ enable_reasoning = args.enable_reasoning
 benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
 
 # Directory: benchmark_results/{model_name}/
-results_path = os.path.join("benchmark_results", model_name)
+_names_list = [model_name]
+if enable_reasoning: _names_list.append("reasoning")
+if use_verigrad: _names_list.append("verigrad")
+sub_folder = "-".join(_names_list)
+results_path = os.path.join("benchmark_results", sub_folder)
 os.makedirs(results_path, exist_ok=True)
 results_file = os.path.join(results_path, "results.jsonl")
 if resume_gen and os.path.exists(results_file):
@@ -74,6 +80,20 @@ else:
 INSTR_SIMPLE = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.\n" 
 INSTR_REASONING = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.<think>\n"
 
+verigrad="""
+
+GOOD DESIGN PRACTICES + SUGGESTIONS:
+
+- Ensure that all output signals are assigned using continuous assignments rather than procedural assignments within always blocks to maintain correct timing and behavior in combinational logic.
+
+- Use proper sensitivity lists in always blocks, ensuring that they only include clock edges or specific conditions relevant to the intended functionality, avoiding asynchronous resets unless explicitly required.
+
+- Implement logic using the appropriate gate types (AND, OR, NOR, NAND) as defined in the design specifications, ensuring that the logical operations accurately reflect the intended behavior without introducing unnecessary complexity or incorrect signal relationships.
+
+- Clearly define and handle reset conditions in a synchronous manner, ensuring that all relevant signals are initialized or cleared appropriately during reset to avoid undefined behavior during operation.
+
+"""
+
 question_list = []
 verified_benchmark_dict_list = []
 for data in benchmark_data:
@@ -81,6 +101,7 @@ for data in benchmark_data:
     for _ in range(num_samples_per_task):
         # qdata = data['question'] + INSTR_REASONING if enable_reasoning else data['question'] + INSTR_SIMPLE
         qdata = data['question'] + INSTR_SIMPLE
+        if use_verigrad: qdata+=verigrad
         question_list.append(qdata)
         verified_benchmark_dict_list.append(data)
     # break

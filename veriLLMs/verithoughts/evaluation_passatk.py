@@ -13,7 +13,7 @@ from tqdm import tqdm
 from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k
 
 
-def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth):
+def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth, keep_log_stdout=False):
 
     # generated .v as file
     verilog_gen_file = os.path.join(tmpfiles_yosys_path, "verilog_gen.v")
@@ -25,7 +25,13 @@ def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth):
     # yosys script (continuously updated!)
     yosys_equivalence_check_file = os.path.join(tmpfiles_yosys_path, "equivalence_check.ys")
 
-    yosys_stdout_list = []
+    yosys_returncode_list = []
+    yosys_success_list = []
+    yosys_checks_dict = []
+    yosys_stdout_dict = []
+    yosys_stderr_dict = []
+
+
     for original_module_name in mod_module_list:
 
         module_name = mod_module_list[original_module_name]
@@ -41,7 +47,9 @@ def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth):
         
         # full_command = ["stdbuf", "-o0", "yosys", "-s", f"{yosys_equivalence_check_file}"] # DO NEED stdbuf!
         full_command = ["yosys", "-s", f"{yosys_equivalence_check_file}"]
-        
+        log_stdout = log_stderr = ""
+        success = log_returncode = None
+
         try:
             result = subprocess.run(
                 full_command,
@@ -51,19 +59,33 @@ def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth):
                 timeout=120
             )
             # print(result)
-            yosys_stdout_list.append(result.returncode)
+            log_returncode = result.returncode
+            if keep_log_stdout: log_stdout = result.stdout
+            log_stderr = result.stderr
+            success = (log_returncode == 0)
 
         except Exception as e:
             
             print(e)
-            yosys_stdout_list.append( -1)
+            success = False
+            log_returncode = -1
 
-    module_check_count = sum(code == 0 for code in yosys_stdout_list) # One-liners FTW!!
+        yosys_returncode_list.append(log_returncode)
+        yosys_success_list.append(success)
+        yosys_checks_dict.append({original_module_name: success})
+        if keep_log_stdout: # not used for now, so no need to keep lenghty logs!
+            yosys_stdout_dict.append({original_module_name: log_stdout})
+        if not success and log_stderr:
+            yosys_stderr_dict.append({original_module_name: log_stderr})
+        else:
+            yosys_stderr_dict.append({original_module_name: ""})
 
     yosys_checkresult_dict = {}
-    yosys_checkresult_dict['stdout_list'] = yosys_stdout_list
-    yosys_checkresult_dict['success'] = module_check_count == len(yosys_stdout_list)
-
+    yosys_checkresult_dict['success'] = all(yosys_success_list)
+    yosys_checkresult_dict['return_codes'] = yosys_returncode_list
+    yosys_checkresult_dict['module_success_list'] = yosys_success_list
+    yosys_checkresult_dict['error_dict'] = yosys_stderr_dict
+    
     return yosys_checkresult_dict
 
 parser = argparse.ArgumentParser(description="Arg Parse")
