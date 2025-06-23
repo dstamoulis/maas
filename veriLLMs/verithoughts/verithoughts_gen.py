@@ -38,13 +38,17 @@ async def get_vllm_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6
     }
     if not vllm_reasoning and any(model_name.startswith(prefix) for prefix in vllm_reasoning_models):
         _extra_body_params["chat_template_kwargs"]= {"enable_thinking": False}
-    response = api_client.chat.completions.create(
-        model=model_name,
-        messages=messages,
-        max_tokens=32768,
-        temperature=0.6,
-        top_p=0.95,
-        extra_body = _extra_body_params,
+    loop = asyncio.get_running_loop() # non-blocking!
+    response = await loop.run_in_executor(
+        None,
+        lambda: api_client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            max_tokens=32768,
+            temperature=temperature,
+            top_p=0.95,
+            extra_body=_extra_body_params,
+        )
     )
     # elapsed_time = round(time.time() - start_time, 4)
     return response.choices[0].message.content
