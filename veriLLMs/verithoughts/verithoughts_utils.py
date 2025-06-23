@@ -1,5 +1,6 @@
-import re, json
+import re, json, os
 import numpy as np
+from math import comb
 
 
 def load_jsonl_file(filename): # from original repo
@@ -13,6 +14,10 @@ def load_jsonl_file(filename): # from original repo
 def savefile(filename, content, fmode='w'):
     with open(filename, fmode) as f:
         f.write(content)
+
+def clear_verilogfile(filename):
+    if os.path.exists(filename): 
+        os.remove(filename)
 
 def rename_modules_and_instantiations(verilog_code):
     # Step 1: Find all module names (including those with parameters using #(...))

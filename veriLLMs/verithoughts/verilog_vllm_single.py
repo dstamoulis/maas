@@ -24,8 +24,7 @@ api_client = OpenAI(
 
 from verithoughts_utils import extract_code_block, load_jsonl_file
 
-reasoning_models = ['Qwen/Qwen3'] # hardcoded!
-
+vllm_reasoning_models = ['Qwen/Qwen3'] # hardcoded!
 # OpenAI-compatible API service with vLLM
 def vllm_get_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, enable_reasoning=False):
 
@@ -37,7 +36,7 @@ def vllm_get_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, enab
     _extra_body_params={
         "top_k": 20,
     }
-    if not enable_reasoning and any(model_name.startswith(prefix) for prefix in reasoning_models):
+    if not enable_reasoning and any(model_name.startswith(prefix) for prefix in vllm_reasoning_models):
         _extra_body_params["chat_template_kwargs"]= {"enable_thinking": False}
     response = api_client.chat.completions.create(
         model=model_name,
@@ -52,7 +51,8 @@ def vllm_get_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, enab
 
 parser = argparse.ArgumentParser(description="Arg Parse")
 parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-7B", help="HF model name")
-parser.add_argument("--num_samples_per_task", type=int, default=1, help="Number of samples per question")
+parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
+parser.add_argument("--batch_size", type=int, default=20, help="Number of LLM requests to run concurrently")
 parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
 parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
 parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
@@ -63,11 +63,13 @@ args = parser.parse_args()
 temperature=args.temperature
 top_p = args.top_p
 max_tokens=args.max_tokens
+resume_gen=args.resume_gen
 
 model_name = args.model_name
-num_samples_per_task = args.num_samples_per_task
+num_samples = args.num_samples
+batch_size = args.batch_size
+
 enable_reasoning = args.enable_reasoning
-resume_gen=args.resume_gen
 use_verigrad = args.use_verigrad
 
 # NO! benchmark_data = load_json(args.benchmark_path)
@@ -76,7 +78,7 @@ use_verigrad = args.use_verigrad
 benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
 
 # Directory: benchmark_results/{model_name}/
-_names_list = [model_name]
+_names_list = [model_name, f"samples_{num_samples}"]
 if enable_reasoning: _names_list.append("reasoning")
 if use_verigrad: _names_list.append("verigrad")
 sub_folder = "-".join(_names_list)
@@ -112,7 +114,7 @@ question_list = []
 verified_benchmark_dict_list = []
 for data in benchmark_data:
     if not data['verified']: continue
-    for _ in range(num_samples_per_task):
+    for _ in range(num_samples):
         # qdata = data['question'] + INSTR_REASONING if enable_reasoning else data['question'] + INSTR_SIMPLE
         qdata = data['question'] + INSTR_SIMPLE
         if use_verigrad: qdata+=verigrad

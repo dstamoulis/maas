@@ -35,7 +35,7 @@ def gpt_get_response(query, model_name="gpt-4o-mini", temperature=0.6):
 
 parser = argparse.ArgumentParser(description="Arg Parse")
 parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="OpenAI model name")
-parser.add_argument("--num_samples_per_task", type=int, default=1, help="Number of samples per question")
+parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
 parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
 parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
 parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
@@ -51,7 +51,7 @@ resume_gen=args.resume_gen
 
 
 model_name = args.model_name
-num_samples_per_task = args.num_samples_per_task
+num_samples = args.num_samples
 enable_reasoning = args.enable_reasoning
 use_verigrad = args.use_verigrad
 
@@ -98,7 +98,7 @@ question_list = []
 verified_benchmark_dict_list = []
 for data in benchmark_data:
     if not data['verified']: continue
-    for _ in range(num_samples_per_task):
+    for _ in range(num_samples):
         # qdata = data['question'] + INSTR_REASONING if enable_reasoning else data['question'] + INSTR_SIMPLE
         qdata = data['question'] + INSTR_SIMPLE
         if use_verigrad: qdata+=verigrad
@@ -117,7 +117,8 @@ for i, question in enumerate(tqdm(question_list, desc="Processing VeriThought qu
     gpt_response = gpt_get_response(question, model_name)
     generated_code = extract_code_block(gpt_response)
     reply_dict = {
-        "question": question,
+        "q_id": i // num_samples,
+        "sample_id": i,
         "full_response": gpt_response,
         "generated_code": generated_code,
         "ground_truth": benchmark_dict['ground_truth']
