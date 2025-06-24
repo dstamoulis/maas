@@ -17,3 +17,5 @@ yosys_runs/
 yosys_runs/*
 **.v
 **.ys
+eda/
+eda/*

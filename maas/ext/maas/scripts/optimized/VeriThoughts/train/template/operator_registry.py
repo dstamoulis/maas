@@ -18,4 +18,8 @@ operator_mapping = {
     "EarlyStop": EarlyStop,
 }
 
+operator_mapping = {
+    "Generate": Generate
+}
+
 operator_names = list(operator_mapping.keys())

@@ -45,6 +45,8 @@ class Generate(Operator):
 
     async def __call__(self, problem, entry_point, instruction):
         prompt = instruction + problem
+        print("Generate:", prompt)
+        exit()
         response = await self._fill_node(GenerateOp, prompt, mode="code_fill", function_name=entry_point)
         return response
     
@@ -54,6 +56,8 @@ class GenerateCoT(Operator):
 
     async def __call__(self, problem, entry_point, instruction):
         prompt = instruction + problem
+        print("GenerateCoT:", prompt)
+        exit()
         response = await self._fill_node(GenerateOp, prompt, mode="code_fill", function_name=entry_point)
         return response
 
@@ -63,6 +67,8 @@ class MultiGenerateCoT(Operator):
 
     async def __call__(self, problem, entry_point, instruction):
         prompt = instruction + problem
+        print("MultiGenerateCoT:", prompt)
+        exit()
         
         response1 = await self._fill_node(GenerateOp, prompt, mode="code_fill", function_name=entry_point)
         response2 = await self._fill_node(GenerateOp, prompt, mode="code_fill", function_name=entry_point)
@@ -88,6 +94,8 @@ class ScEnsemble(Operator):
             solution_text += f"{chr(65 + index)}: \n{str(solution)}\n\n\n"
 
         prompt = SC_ENSEMBLE_PROMPT.format(problem=problem, solutions=solution_text)
+        print("ScEnsemble:", prompt)
+        exit()
         response = await self._fill_node(ScEnsembleOp, prompt, mode="xml_fill")
 
         answer = response.get("solution_letter", "")
@@ -152,6 +160,8 @@ class Test(Operator):
                     exec_pass=f"executed unsuccessfully, error: \n {result}",
                     test_fail="executed unsucessfully",
                 )
+                print("Test:", prompt)
+                exit()
                 response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
                 solution = response["reflection_and_solution"]
             else:
@@ -162,6 +172,8 @@ class Test(Operator):
                     test_fail=result,
                 )
                 response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
+                print("Test:", prompt)
+                exit()
                 solution = response["reflection_and_solution"]
         
         result = self.exec_code(solution, entry_point)
@@ -176,6 +188,8 @@ class SelfRefine(Operator):
 
     async def __call__(self, problem, solution):
         prompt = SELFREFINE_PROMPT.format(problem=problem, solution=solution)
+        print("SelfRefine:", prompt)
+        exit()
         response = await self._fill_node(SelfRefineOp, prompt, mode="code_fill")
         return response
     

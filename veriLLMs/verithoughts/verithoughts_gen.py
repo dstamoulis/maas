@@ -23,6 +23,8 @@ from openai import AsyncOpenAI
 api_client_async = AsyncOpenAI()
 
 from verithoughts_utils import extract_code_block, load_jsonl_file
+from verithoughts_prompts import *
+
 
 # OpenAI-compatible API service with vLLM
 vllm_reasoning_models = ['Qwen/Qwen3'] # hardcoded!
@@ -96,6 +98,13 @@ parser.add_argument(
     default="medium",
     help="How much reasoning effort to spend (one of: low, medium, high)."
 ) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
+parser.add_argument(
+    "--prompt_op",
+    type=str,
+    choices=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop"],
+    default="Generate",
+    help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
+) # Following the MaAS naming
 parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
 parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
 parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") # Not used
@@ -116,6 +125,8 @@ use_verigrad = args.use_verigrad
 use_vllm = args.use_vllm
 openai_reasoning_effort = args.openai_reasoning_effort
 vllm_reasoning = args.vllm_reasoning
+prompt_op = args.prompt_op
+
 
 # NO! benchmark_data = load_json(args.benchmark_path)
 # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -128,6 +139,8 @@ if vllm_reasoning and use_vllm:
      _names_list.append("reasoning")
 if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
      _names_list.append(openai_reasoning_effort)
+if prompt_op is not "Generate":
+     _names_list.append(prompt_op)
 if use_verigrad: _names_list.append("verigrad")
 sub_folder = "-".join(_names_list)
 results_path = os.path.join("benchmark_results", sub_folder)
@@ -140,10 +153,6 @@ else:
     already_done = 0
     with open(results_file, "w") as f:
         pass # reset! their code appends indefinitely! OMG!
-
-
-INSTR_SIMPLE = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.\n" 
-INSTR_REASONING = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.<think>\n"
 
 question_list = []
 verified_benchmark_dict_list = []
