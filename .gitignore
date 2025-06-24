@@ -19,3 +19,4 @@ yosys_runs/*
 **.ys
 eda/
 eda/*
+**.zip
