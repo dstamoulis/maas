@@ -25,8 +25,53 @@ api_client_async = AsyncOpenAI()
 
 from verithoughts_utils import extract_code_block, load_jsonl_file, get_result_entry, load_jsonl
 from verithoughts_prompts import *
-from verithoughts_operator_selfrefine import get_vllm_response, get_openai_response, openai_reasoning_models, vllm_reasoning_models
+from verithoughts_operator_generate import get_vllm_response, get_openai_response, openai_reasoning_models, vllm_reasoning_models
 
+
+
+# OpenAI-compatible API service with vLLM
+vllm_reasoning_models = ['Qwen/Qwen3'] # hardcoded!
+async def get_vllm_response_gated(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, vllm_reasoning=False, skip_call=False):
+
+    if skip_call: return "Skipped"
+
+    # start_time = time.time()
+    messages = [
+        {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
+        {"role": "user", "content": query}
+    ]
+    _extra_body_params={
+        "top_k": 20,
+    }
+    if not vllm_reasoning and any(model_name.startswith(prefix) for prefix in vllm_reasoning_models):
+        _extra_body_params["chat_template_kwargs"]= {"enable_thinking": False}
+    loop = asyncio.get_running_loop() # non-blocking!
+    reasoning_track = await loop.run_in_executor(
+        None,
+        lambda: api_client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            max_tokens=32768,
+            temperature=temperature,
+            top_p=0.95,
+            extra_body=_extra_body_params,
+        )
+    )    
+    
+    decide_messages = [
+        {"role": "system", "content": "You are an response parsing/processing tool that tries to understand the choice being made given a reasoning decision!"},
+        {"role": "user", "content": DECIDE_PROMPT.format(reasoning_track=reasoning_track)}
+    ]
+
+    response = 
+            response = await api_client_async.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=decide_messages,
+                temperature=temperature,
+            )
+
+    # elapsed_time = round(time.time() - start_time, 4)
+    return response.choices[0].message.content
 
 
 
@@ -158,7 +203,7 @@ if __name__ == "__main__":
             llm_question = SC_ENSEMBLE_PROMPT.format(code_task=question, solutions=solution_text)
 
             if use_vllm:
-                batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning))
+                batch_runs.append(get_vllm_response_gated(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning))
             else:
                 batch_runs.append(get_openai_response(llm_question, model_name, openai_reasoning_effort=openai_reasoning_effort))
 

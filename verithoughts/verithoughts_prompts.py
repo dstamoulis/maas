@@ -45,3 +45,53 @@ Please reply with the LETTER choice ONLY!
 Do not include any additional text or explanation!
 
 """
+
+
+REACT_PROMPT = """
+
+Given a Verilog code task [..], you need to analyze the .. propose a code solution: 
+
+### Code Task
+{code_task}
+
+In your reasoning make sure you 
+
+* Instruction 1:
+.... Seq/Combo ...
+
+* Instruction 2:
+.... ripple ...
+
+* Instruction 3:
+.... reg size ...
+
+* Instruction 4:
+.... timing ...
+
+* Instruction 5:
+.... truth table ...
+
+Make sure your input and output interface has the same names as described in the question. 
+Please start your Verilog code solution with CODE BEGIN and end with CODE END!!
+
+
+"""
+
+
+DECIDE_PROMPT = """
+You will be given a block of LLM reasoning that ends with a choice recommendation. This is from 
+a previous call where the agent was presented with different solutions A, B, ... and reasons which
+on is the more correct one.
+
+### Reasoning trace:
+{reasoning_track}
+
+Your job is to extract the final choice from this reasoning.  
+- The choice must be one of the letter IDs (A, B, C, etc.) corresponding to the provided options.  
+- Output only the single letter (e.g. “A”), with no surrounding punctuation, explanation, or extra text.
+
+Make sure your choice is a letter ID present in provided reasoning.
+Please reply with the LETTER choice ONLY!
+Do not include any additional text or explanation!
+
+"""
