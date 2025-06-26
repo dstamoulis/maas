@@ -66,7 +66,7 @@ if __name__ == "__main__":
     vllm_reasoning = args.vllm_reasoning
 
     # Following the MaAS naming
-    prompt_op = "Test"
+    prompt_op = "SelfRefine"
 
     # NO! benchmark_data = load_json(args.benchmark_path)
     # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -146,7 +146,7 @@ if __name__ == "__main__":
             if success:
                 llm_question = question + INSTR_SIMPLE
             else:
-                llm_question = question + REFLECTION_ON_YOSYS_TEST_PROMPT.format(code_task=question, solution=result_generate['generated_code'], test_fail=error_log)
+                llm_question = question + SELFREFINE_PROMPT_FROM_YOSYS_TEST.format(code_task=question, solution=result_generate['generated_code'], test_fail=error_log)
 
             if use_vllm:
                 batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=success))
