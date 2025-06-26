@@ -105,14 +105,13 @@ if __name__ == "__main__":
     results_path_selfrefine = os.path.join("benchmark_results", sub_folder)
     # Results file
     results_file_selfrefine = os.path.join(results_path_selfrefine, "results.jsonl")
-    results_data_selfrefine = load_jsonl(results_file_selfrefine)
+    # results_data_selfrefine = load_jsonl(results_file_selfrefine) # NOT USED
     # Yosys evals file (these require GT to get) -- Not needed!
     # yosys_evals_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_evals.jsonl")
     # yosys_evals_results_selfrefine = load_jsonl(yosys_evals_filename_selfrefine)
     # Yosys syntax checks file (these don't require GT to get)
     yosys_syntaxchecks_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_syntax_checks.jsonl")
-    yosys_syntaxchecks_results_selfrefine = load_jsonl(yosys_syntaxchecks_filename_selfrefine)
-
+    # yosys_syntaxchecks_results_selfrefine = load_jsonl(yosys_syntaxchecks_filename_selfrefine) # NOT USED
 
     question_list = []
     verified_benchmark_dict_list = []

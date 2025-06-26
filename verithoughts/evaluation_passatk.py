@@ -114,7 +114,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--prompt_op",
         type=str,
-        choices=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop"],
+        choices=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop",  "ReAct"],
         default="Generate",
         help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
     ) # Following the MaAS naming
