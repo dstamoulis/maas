@@ -68,8 +68,10 @@ In the response generation process, make sure to address the following points:
  
 The interface (inputs/outputs) in your solution must match the names and bit widths described in the task.
  
+First, present your reasoning in detail on how exactly you will be addressing these points, if applicable!
+
 Make sure your input and output interface has the same names as described in the question. 
-Please start your new corrected Verilog code solution with CODE BEGIN and end with CODE END.
+Please start your Verilog code solution with CODE BEGIN and end with CODE END.
 
 """
 
