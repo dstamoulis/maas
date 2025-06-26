@@ -13,7 +13,7 @@ from tqdm import tqdm
 from openai import OpenAI
 api_client = OpenAI()
 
-from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k
+from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k, get_result_entry
 
 import pprint
 
@@ -46,18 +46,6 @@ def debug_pretty_print(question_id, sample_id, result, yosys_checkresult_dict, r
         print("Reflection Result:")
         pp.pprint(reflection_result)
         print(f"{'='*80}\n")
-
-# Function to retrieve a specific result entry by q_id and sample_id
-def get_result_entry(results, q_id, sample_id):
-    """
-    Fetches the result dict for the given (q_id, sample_id) pair.
-    Raises ValueError if not found.
-    """
-    for entry in results:
-        if entry.get("q_id") == q_id and entry.get("sample_id") == sample_id:
-            return entry
-    # If we get here, no matching entry was found
-    raise ValueError(f"No result found for q_id={q_id}, sample_id={sample_id}")
 
 
 # Chat Completion API
@@ -124,57 +112,59 @@ def reflect_on_yosysrun(generated_code, ground_truth, error_log):
     )    
     return get_gpt_reflection(reflection_prompt)
 
-parser = argparse.ArgumentParser(description="Arg Parse")
-parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-14B", help="HF model name")
-parser.add_argument("--question_id", type=int, default=0, help="Question id")
-parser.add_argument("--sample_id", type=int, default=0, help="the n-th sample for that question")
-parser.add_argument("--num_samples", type=int, default=20, help="Number of samples per question")
-parser.add_argument("--gpt_reflect", action="store_true", help="Get a GPT diagnosis in this call directly")
-args = parser.parse_args()
-
-model_name = args.model_name
-question_id = args.question_id
-sample_id = args.sample_id
-gpt_reflect = args.gpt_reflect
-num_samples = args.num_samples
-
-# NO! parser.add_argument("--yosys_location", type=str, help="Absolute path to yosys environment.") JUST EXPORT IN PATH!!
-# NO! yosys_location = args.yosys_location
-# HECK NO! parser.add_argument("--old_data", action="store_true", help="Old data format") # WTH?
-
-# NO! benchmark_data = load_json(args.benchmark_path)
-# NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
-# YES! Login using e.g. `huggingface-cli login` to access this dataset
-# benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
-
-# Directory: benchmark_results/{model_name}/
-_names_list = [model_name, f"samples_{num_samples}"]
-sub_folder = "-".join(_names_list)
-results_path = os.path.join("benchmark_results", sub_folder)
-os.makedirs(results_path, exist_ok=True)
-results_file = os.path.join(results_path, "results.jsonl")
-results_data = load_jsonl(results_file)
-# Yosys evals file
-yosys_evals_filename = os.path.join(results_path, "yosys_evals.jsonl")
-results_file = os.path.join(results_path, "yo.jsonl")
-yosys_evals_results = load_jsonl(yosys_evals_filename)
 
 
-try:
-    result = get_result_entry(results_data, question_id, sample_id)
-    yosys_checkresult_dict = get_result_entry(yosys_evals_results, question_id, sample_id)
-    # print("Found entry:", entry)
-except ValueError as e:
-    print("Error:", e)
-    exit()
+if __name__ == "__main__":
 
-reflection_result = None
-if gpt_reflect:
-    if not yosys_checkresult_dict['success']:
-        reflection_result = \
-            reflect_on_yosysrun(result['generated_code'], result['ground_truth'], yosys_checkresult_dict)
-    else:
-        print("Successful run; no need to GPT-reflect")
+    parser = argparse.ArgumentParser(description="Arg Parse")
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-14B", help="HF model name")
+    parser.add_argument("--question_id", type=int, default=0, help="Question id")
+    parser.add_argument("--sample_id", type=int, default=0, help="the n-th sample for that question")
+    parser.add_argument("--num_samples", type=int, default=20, help="Number of samples per question")
+    parser.add_argument("--gpt_reflect", action="store_true", help="Get a GPT diagnosis in this call directly")
+    args = parser.parse_args()
+
+    model_name = args.model_name
+    question_id = args.question_id
+    sample_id = args.sample_id
+    gpt_reflect = args.gpt_reflect
+    num_samples = args.num_samples
+
+    # NO! parser.add_argument("--yosys_location", type=str, help="Absolute path to yosys environment.") JUST EXPORT IN PATH!!
+    # NO! yosys_location = args.yosys_location
+    # HECK NO! parser.add_argument("--old_data", action="store_true", help="Old data format") # WTH?
+
+    # NO! benchmark_data = load_json(args.benchmark_path)
+    # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
+    # YES! Login using e.g. `huggingface-cli login` to access this dataset
+    # benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+
+    # Directory: benchmark_results/{model_name}/
+    _names_list = [model_name, f"samples_{num_samples}"]
+    sub_folder = "-".join(_names_list)
+    results_path = os.path.join("benchmark_results", sub_folder)
+    os.makedirs(results_path, exist_ok=True)
+    results_file = os.path.join(results_path, "results.jsonl")
+    results_data = load_jsonl(results_file)
+    # Yosys evals file
+    yosys_evals_filename = os.path.join(results_path, "yosys_evals.jsonl")
+    yosys_evals_results = load_jsonl(yosys_evals_filename)
+
+    try:
+        result = get_result_entry(results_data, question_id, sample_id)
+        yosys_checkresult_dict = get_result_entry(yosys_evals_results, question_id, sample_id)
+        # print("Found entry:", entry)
+    except ValueError as e:
+        print("Error:", e)
+        exit()
+
+    reflection_result = None
+    if gpt_reflect:
+        if not yosys_checkresult_dict['success']:
+            reflection_result = \
+                reflect_on_yosysrun(result['generated_code'], result['ground_truth'], yosys_checkresult_dict)
+        else:
+            print("Successful run; no need to GPT-reflect")
 
 
-debug_pretty_print(question_id, sample_id, result, yosys_checkresult_dict, reflection_result)
+    debug_pretty_print(question_id, sample_id, result, yosys_checkresult_dict, reflection_result)

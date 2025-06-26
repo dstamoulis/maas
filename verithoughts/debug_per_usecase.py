@@ -10,12 +10,15 @@ import numpy as np
 from datasets import load_dataset
 from tqdm import tqdm
 import uuid
-import asyncio
+
+from openai import OpenAI
+api_client = OpenAI()
 
 from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k, clear_verilogfile
+from diagnosis_per_usecase import get_result_entry
 
 
-async def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth, keep_log_stdout=False):
+def yosys_correctness_check_debug(tmpfiles_yosys_path, generated_code, ground_truth, keep_log_stdout=False):
 
     # generated .v as file
     tmp_fileid = uuid.uuid4().hex
@@ -28,7 +31,6 @@ async def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_tr
     # yosys script (continuously updated!)
     yosys_equivalence_check_file = os.path.join(tmpfiles_yosys_path, f"equivalence_check_{tmp_fileid}.ys")
 
-
     yosys_returncode_list = []
     yosys_success_list = []
     yosys_checks_dict = []
@@ -39,8 +41,8 @@ async def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_tr
 
         module_name = mod_module_list[original_module_name]
         yosys_equivalence_check_script = f"""
-        read_verilog {verilog_gt_file}
-        read_verilog {verilog_gen_file}
+        read_verilog -sv {verilog_gt_file}
+        read_verilog -sv {verilog_gen_file}
         prep; proc; opt; memory;
         clk2fflogic;
         miter -equiv -flatten {module_name} {original_module_name} miter
@@ -97,22 +99,20 @@ async def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_tr
     
     return yosys_checkresult_dict
 
+
 parser = argparse.ArgumentParser(description="Arg Parse")
-parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="HF model name")
-parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
-parser.add_argument("--batch_size", type=int, default=20, help="Number of yosys runs to run concurrently")
-parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-14B", help="HF model name")
+parser.add_argument("--question_id", type=int, default=0, help="Question id")
+parser.add_argument("--sample_id", type=int, default=0, help="the n-th sample for that question")
+parser.add_argument("--num_samples", type=int, default=20, help="Number of samples per question")
+parser.add_argument("--gpt_reflect", action="store_true", help="Get a GPT diagnosis in this call directly")
 args = parser.parse_args()
 
 model_name = args.model_name
+question_id = args.question_id
+sample_id = args.sample_id
+gpt_reflect = args.gpt_reflect
 num_samples = args.num_samples
-enable_reasoning = args.enable_reasoning
-batch_size = args.batch_size
-
-# 0) Pre-flight: fail fast if yosys doesn’t exist
-if shutil.which("yosys") is None:
-    sys.stderr.write("[ERROR] `yosys` not found on PATH — aborting! Make sure you export it!!\n")
-    raise SystemExit(1)
 
 # NO! parser.add_argument("--yosys_location", type=str, help="Absolute path to yosys environment.") JUST EXPORT IN PATH!!
 # NO! yosys_location = args.yosys_location
@@ -121,56 +121,31 @@ if shutil.which("yosys") is None:
 # NO! benchmark_data = load_json(args.benchmark_path)
 # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
 # YES! Login using e.g. `huggingface-cli login` to access this dataset
-benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+# benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
 
 # Directory: benchmark_results/{model_name}/
 _names_list = [model_name, f"samples_{num_samples}"]
-if enable_reasoning: _names_list.append("reasoning")
-# if use_verigrad: _names_list.append("verigrad")
 sub_folder = "-".join(_names_list)
 results_path = os.path.join("benchmark_results", sub_folder)
 os.makedirs(results_path, exist_ok=True)
 results_file = os.path.join(results_path, "results.jsonl")
 results_data = load_jsonl(results_file)
+# Yosys evals file
+yosys_evals_filename = os.path.join(results_path, "yosys_evals.jsonl")
+results_file = os.path.join(results_path, "yo.jsonl")
+yosys_evals_results = load_jsonl(yosys_evals_filename)
 # Under that dir, have the tmp yosys files....
 tmpfiles_yosys_path = os.path.join(results_path, "tmp")
 os.makedirs(tmpfiles_yosys_path, exist_ok=True)
-# Same for yosys results ... c'mon....
-yosys_evals_filename = os.path.join(results_path, "yosys_evals.jsonl")
-with open(yosys_evals_filename, "w") as f:
-    pass # reset! their code appends indefinitely! OMG!
 
-loop = asyncio.get_event_loop()
-num_batches = (len(results_data) + batch_size - 1) // batch_size
-for i in tqdm(range(0, len(results_data), batch_size), total=num_batches, desc="Running yosys checks batches!!"):
 
-    results_batch = results_data[i : i + batch_size]
-    batch_runs = [yosys_correctness_check(tmpfiles_yosys_path, result['generated_code'], result['ground_truth']) for result in results_batch]
-    yosys_checkresults = loop.run_until_complete(asyncio.gather(*batch_runs))
+try:
+    result = get_result_entry(results_data, question_id, sample_id)
+    yosys_checkresult_dict = get_result_entry(yosys_evals_results, question_id, sample_id)
+    # print("Found entry:", entry)
+except ValueError as e:
+    print("Error:", e)
+    exit()
 
-    for j, yosys_checkresult in enumerate(yosys_checkresults):
-        idx = i + j
-        q_id = idx // num_samples
-        sample_id = idx % num_samples
-        yosys_checkresult_dict = {
-            "q_id": q_id,
-            "sample_id": sample_id,
-            "success": yosys_checkresult["success"],
-            "return_codes": yosys_checkresult["return_codes"],
-            "module_success_list": yosys_checkresult["module_success_list"],
-            "error_dict": yosys_checkresult["error_dict"],
-        }
-
-        with open(yosys_evals_filename, "a") as f:
-            f.write(json.dumps(yosys_checkresult_dict) + "\n")
-
-yosys_results_dict = load_jsonl(yosys_evals_filename) # Oh my!!!
-correct_counts = []
-for i in range(0, len(yosys_results_dict), num_samples):
-    per_question_yosys_results_dict = yosys_results_dict[i:i+num_samples]
-    correct_counter = sum(1 for sample in per_question_yosys_results_dict if sample['success']) # One-liner FTW!
-    correct_counts.append(correct_counter)
-
-print("pass@1:", pass_at_k(correct_counts, num_samples, 1))
-print("pass@5:", pass_at_k(correct_counts, num_samples, 5))
-print("pass@10:", pass_at_k(correct_counts, num_samples, 10))
+yosys_checkresult_dict_again = yosys_correctness_check_debug(tmpfiles_yosys_path, result['generated_code'], result['ground_truth'])
+print(yosys_checkresult_dict_again['error_dict'])

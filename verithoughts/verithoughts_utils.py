@@ -137,3 +137,17 @@ def pass_at_k(c_list, n, k):
                 val = 1 - comb(n - c, k) / comb(n, k) if (n - c) >= k else 1.0
                 pass_at_k_values.append(val)
     return np.mean(pass_at_k_values)
+
+
+# Function to retrieve a specific result entry by q_id and sample_id
+def get_result_entry(results, q_id, sample_id):
+    """
+    Fetches the result dict for the given (q_id, sample_id) pair.
+    Raises ValueError if not found.
+    """
+    for entry in results:
+        if entry.get("q_id") == q_id and entry.get("sample_id") == sample_id:
+            return entry
+    # If we get here, no matching entry was found
+    raise ValueError(f"No result found for q_id={q_id}, sample_id={sample_id}")
+
