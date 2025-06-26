@@ -64,12 +64,11 @@ async def get_vllm_response_gated(query, model_name="Qwen/Qwen2.5-7B", temperatu
         {"role": "user", "content": DECIDE_PROMPT.format(reasoning_track=reasoning_track)}
     ]
 
-    response = 
-            response = await api_client_async.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=decide_messages,
-                temperature=temperature,
-            )
+    response = await api_client_async.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=decide_messages,
+        temperature=temperature,
+    )
 
     # elapsed_time = round(time.time() - start_time, 4)
     return response.choices[0].message.content
