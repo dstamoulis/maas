@@ -78,12 +78,20 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
     parser.add_argument("--batch_size", type=int, default=20, help="Number of yosys runs to run concurrently")
     parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+    parser.add_argument(
+        "--prompt_op",
+        type=str,
+        choices=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop"],
+        default="Generate",
+        help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
+    ) # Following the MaAS naming
     args = parser.parse_args()
 
     model_name = args.model_name
     num_samples = args.num_samples
     enable_reasoning = args.enable_reasoning
     batch_size = args.batch_size
+    prompt_op = args.prompt_op
 
     # 0) Pre-flight: fail fast if yosys doesn’t exist
     if shutil.which("yosys") is None:
@@ -103,6 +111,8 @@ if __name__ == "__main__":
     _names_list = [model_name, f"samples_{num_samples}"]
     if enable_reasoning: _names_list.append("reasoning")
     # if use_verigrad: _names_list.append("verigrad")
+    if prompt_op != "Generate":
+        _names_list.append(prompt_op)
     sub_folder = "-".join(_names_list)
     results_path = os.path.join("benchmark_results", sub_folder)
     os.makedirs(results_path, exist_ok=True)
