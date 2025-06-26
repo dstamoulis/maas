@@ -49,31 +49,27 @@ Do not include any additional text or explanation!
 
 REACT_PROMPT = """
 
-Given a Verilog code task [..], you need to analyze the .. propose a code solution: 
-
+Given a Verilog code task you need to analyze the requirements and propose a correct, synthesizable code solution:
+ 
 ### Code Task
 {code_task}
-
-In your reasoning make sure you 
-
-* Instruction 1:
-.... Seq/Combo ...
-
-* Instruction 2:
-.... ripple ...
-
-* Instruction 3:
-.... reg size ...
-
-* Instruction 4:
-.... timing ...
-
-* Instruction 5:
-.... truth table ...
-
+ 
+In the response generation process, make sure to address the following points:
+ 
+* **Combinational vs. Sequential Logic**: Determine whether the task requires combinational or sequential logic. Use `assign` for combinational and `always @('appropiate clock edge or signal name')` with non-blocking assignments for sequential logic. Avoid mixing them.
+ 
+* **Fundamental Design Concepts**: Ensure a solid understanding of basic logic components and/or algorithms relevant to the problem (e.g., multiplexers, adders, encoders, FSMs). Structure your solution with a clear outline before writing code.
+ 
+* **Register Widths**: Use register and wire widths that match the task specification. Don't default to `[31:0]` unless required.
+ 
+* **Timing and Triggers**: Trigger actions on appropriate signals, including synchronous and asynchronous resets. Ensure correct timing behavior, especially across clock cycles in sequential designs.
+ 
+* **Truth Table Coverage**: For combinational logic, ensure the implementation satisfies the full truth table. Consider all possible input cases in your design. Avoid race conditions in the final design. 
+ 
+The interface (inputs/outputs) in your solution must match the names and bit widths described in the task.
+ 
 Make sure your input and output interface has the same names as described in the question. 
-Please start your Verilog code solution with CODE BEGIN and end with CODE END!!
-
+Please start your new corrected Verilog code solution with CODE BEGIN and end with CODE END.
 
 """
 
