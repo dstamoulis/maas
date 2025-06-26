@@ -17,6 +17,15 @@ yosys_runs/
 yosys_runs/*
 **.v
 **.ys
+**.v.txt
+**.sdc
 eda/
 eda/*
 **.zip
+verithoughts/skywater-pdk/
+verithoughts/skywater-pdk/*
+verithoughts/parser.out
+verithoughts/parsetab.py
+
+!verithoughts/yosys_synth/tribuff_map.v
+!verithoughts/yosys_synth/latch_map.v
