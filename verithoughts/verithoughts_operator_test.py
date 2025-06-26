@@ -106,9 +106,9 @@ if __name__ == "__main__":
     # Results file
     results_file_generate = os.path.join(results_path_generate, "results.jsonl")
     results_data_generate = load_jsonl(results_file_generate)
-    # Yosys evals file (these require GT to get)
-    yosys_evals_filename_generate = os.path.join(results_path_generate, "yosys_evals.jsonl")
-    yosys_evals_results_generate = load_jsonl(yosys_evals_filename_generate)
+    # Yosys evals file (these require GT to get) -- Not needed!
+    # yosys_evals_filename_generate = os.path.join(results_path_generate, "yosys_evals.jsonl")
+    # yosys_evals_results_generate = load_jsonl(yosys_evals_filename_generate)
     # Yosys syntax checks file (these don't require GT to get)
     yosys_syntaxchecks_filename_generate = os.path.join(results_path_generate, "yosys_syntax_checks.jsonl")
     yosys_syntaxchecks_results_generate = load_jsonl(yosys_syntaxchecks_filename_generate)
@@ -144,7 +144,6 @@ if __name__ == "__main__":
 
             # create question for self-reflect
             if success:
-                assert 1==0
                 llm_question = question + INSTR_SIMPLE
             else:
                 llm_question = question + REFLECTION_ON_YOSYS_TEST_PROMPT.format(code_task=question, solution=result_generate['generated_code'], test_fail=error_log)
