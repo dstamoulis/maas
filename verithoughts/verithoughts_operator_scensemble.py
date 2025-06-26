@@ -46,7 +46,7 @@ async def get_vllm_response_gated(query, model_name="Qwen/Qwen2.5-7B", temperatu
     if not vllm_reasoning and any(model_name.startswith(prefix) for prefix in vllm_reasoning_models):
         _extra_body_params["chat_template_kwargs"]= {"enable_thinking": False}
     loop = asyncio.get_running_loop() # non-blocking!
-    reasoning_track = await loop.run_in_executor(
+    init_response = await loop.run_in_executor(
         None,
         lambda: api_client.chat.completions.create(
             model=model_name,
@@ -57,6 +57,7 @@ async def get_vllm_response_gated(query, model_name="Qwen/Qwen2.5-7B", temperatu
             extra_body=_extra_body_params,
         )
     )    
+    reasoning_track=init_response.choices[0].message.content
     
     decide_messages = [
         {"role": "system", "content": "You are an response parsing/processing tool that tries to understand the choice being made given a reasoning decision!"},
