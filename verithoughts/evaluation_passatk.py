@@ -130,6 +130,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     prompt_op = args.prompt_op
     verilogeval = args.verilogeval
+    if verilogeval: batch_size = 10 # 1GB yosys runs! wow!
     
 
     # 0) Pre-flight: fail fast if yosys doesn’t exist

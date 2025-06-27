@@ -184,7 +184,7 @@ if __name__ == "__main__":
     results_file, results_path = get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest)
     if resume_gen and os.path.exists(results_file):
         existing_results = load_jsonl_file(results_file)
-        already_done = len(existing_results) // num_samples
+        already_done = len(existing_results) # // num_samples: will match since in dir-name!
     else:
         already_done = 0
         with open(results_file, "w") as f:
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
     num_batches = (len(question_list) + batch_size - 1) // batch_size
-    for i in tqdm(range(0, len(question_list), batch_size), total=num_batches, desc="Processing VeriThought batches!!"):
+    for i in tqdm(range(0, len(question_list), batch_size), total=num_batches, desc="Processing batches!!"):
         if i < already_done: continue
 
         questions_batch = question_list[i : i + batch_size]
