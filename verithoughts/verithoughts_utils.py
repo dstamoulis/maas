@@ -19,6 +19,7 @@ def clear_verilogfile(filename):
     if os.path.exists(filename): 
         os.remove(filename)
 
+
 def rename_modules_and_instantiations(verilog_code):
     # Step 1: Find all module names (including those with parameters using #(...))
     module_pattern = re.compile(r'\bmodule\s+(\w+)\s*(?:#\s*\(.*?\))?\s*\(', re.DOTALL)

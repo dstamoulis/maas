@@ -25,7 +25,6 @@ api_client_async = AsyncOpenAI()
 from verithoughts_utils import extract_code_block, load_jsonl_file
 from verithoughts_prompts import *
 
-
 # OpenAI-compatible API service with vLLM
 vllm_reasoning_models = ['Qwen/Qwen3'] # hardcoded!
 async def get_vllm_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, vllm_reasoning=False, skip_call=False):
@@ -111,6 +110,19 @@ def get_benchmark_lists(benchmark_data, num_samples, verilogeval=False):
     return question_list, verified_benchmark_dict_list
 
 
+def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest):
+    _names_list = [model_name, f"samples_{num_samples}"]
+    if vllm_reasoning and use_vllm:
+        _names_list.append("reasoning")
+    if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
+        _names_list.append(openai_reasoning_effort)
+    _names_list.append(prompt_op)
+    sub_folder = "-".join(_names_list)
+    results_path = os.path.join(benchmark_results_dest, sub_folder)
+    os.makedirs(results_path, exist_ok=True)
+    results_file = os.path.join(results_path, "results.jsonl")
+    return results_file, results_path
+
 
 if __name__ == "__main__":
         
@@ -169,18 +181,7 @@ if __name__ == "__main__":
         benchmark_results_dest = "benchmark_results"
 
     # Directory: benchmark_results/{model_name}/
-    _names_list = [model_name, f"samples_{num_samples}"]
-    if vllm_reasoning and use_vllm:
-        _names_list.append("reasoning")
-    if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
-        _names_list.append(openai_reasoning_effort)
-    if prompt_op != "Generate":
-        _names_list.append(prompt_op)
-    if use_verigrad: _names_list.append("verigrad")
-    sub_folder = "-".join(_names_list)
-    results_path = os.path.join(benchmark_results_dest, sub_folder)
-    os.makedirs(results_path, exist_ok=True)
-    results_file = os.path.join(results_path, "results.jsonl")
+    results_file, results_path = get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest)
     if resume_gen and os.path.exists(results_file):
         existing_results = load_jsonl_file(results_file)
         already_done = len(existing_results) // num_samples
@@ -205,9 +206,9 @@ if __name__ == "__main__":
             elif prompt_op == "GenerateCoT":
                 q_prompt = GENERATE_COT_PROMPT.format(code_task=q)
             elif prompt_op == "ReAct":
-                q_prompt = REACT_PROMPT.format(code_task=data['question'])
+                q_prompt = REACT_PROMPT.format(code_task=q)
             elif prompt_op == "ReActSimple":
-                q_prompt = REACT_PROMPT_SIMPLE.format(code_task=data['question'])
+                q_prompt = REACT_PROMPT_SIMPLE.format(code_task=q)
             questions_batch_prompts.append(q_prompt)
 
         if use_vllm:
@@ -218,7 +219,7 @@ if __name__ == "__main__":
         else:
             batch_runs = [
                 get_openai_response(q, model_name, openai_reasoning_effort=openai_reasoning_effort) 
-                for q in questions_batch
+                for q in questions_batch_prompts
             ]
         llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
 

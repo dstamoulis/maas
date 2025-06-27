@@ -13,6 +13,7 @@ import uuid
 import asyncio
 
 from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k, clear_verilogfile
+from generate_allops import get_results_filepath
 
 
 async def yosys_correctness_check(tmpfiles_yosys_path, generated_code, ground_truth, keep_log_stdout=False):
@@ -109,8 +110,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Arg Parse")
     parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="HF model name")
     parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
+    parser.add_argument("--use_vllm", action="store_true", help="Enable if you want to run with vLLM")
     parser.add_argument("--batch_size", type=int, default=20, help="Number of yosys runs to run concurrently")
-    parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+    parser.add_argument("--vllm_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
     parser.add_argument(
         "--prompt_op",
         type=str,
@@ -118,13 +120,17 @@ if __name__ == "__main__":
         default="Generate",
         help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
     ) # Following the MaAS naming
+    parser.add_argument("--verilogeval", action="store_true", help="Enable if you have the verilogeval dataset")
     args = parser.parse_args()
 
     model_name = args.model_name
     num_samples = args.num_samples
-    enable_reasoning = args.enable_reasoning
+    vllm_reasoning = args.vllm_reasoning
+    use_vllm = args.use_vllm
     batch_size = args.batch_size
     prompt_op = args.prompt_op
+    verilogeval = args.verilogeval
+    
 
     # 0) Pre-flight: fail fast if yosys doesn’t exist
     if shutil.which("yosys") is None:
@@ -138,18 +144,15 @@ if __name__ == "__main__":
     # NO! benchmark_data = load_json(args.benchmark_path)
     # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
     # YES! Login using e.g. `huggingface-cli login` to access this dataset
-    benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+    if verilogeval:
+        benchmark_data = load_dataset("dakies/nvlabs-verilogeval-v2-spec-to-rtl", split="test")
+        benchmark_results_dest = "benchmark_results_verilogeval"
+    else:
+        benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+        benchmark_results_dest = "benchmark_results"
 
     # Directory: benchmark_results/{model_name}/
-    _names_list = [model_name, f"samples_{num_samples}"]
-    if enable_reasoning: _names_list.append("reasoning")
-    # if use_verigrad: _names_list.append("verigrad")
-    if prompt_op != "Generate":
-        _names_list.append(prompt_op)
-    sub_folder = "-".join(_names_list)
-    results_path = os.path.join("benchmark_results", sub_folder)
-    os.makedirs(results_path, exist_ok=True)
-    results_file = os.path.join(results_path, "results.jsonl")
+    results_file, results_path = get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest)
     results_data = load_jsonl(results_file)
     # Under that dir, have the tmp yosys files....
     tmpfiles_yosys_path = os.path.join(results_path, "tmp")

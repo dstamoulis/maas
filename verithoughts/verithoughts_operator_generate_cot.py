@@ -25,7 +25,7 @@ api_client_async = AsyncOpenAI()
 
 from verithoughts_utils import extract_code_block, load_jsonl_file, get_result_entry, load_jsonl
 from verithoughts_prompts import *
-from verithoughts_operator_generate import get_vllm_response, get_openai_response, openai_reasoning_models, vllm_reasoning_models
+from verithoughts_operator_generate import get_vllm_response, get_openai_response, openai_reasoning_models, vllm_reasoning_models, get_benchmark_lists
 
 
 if __name__ == "__main__":
@@ -93,39 +93,8 @@ if __name__ == "__main__":
         with open(results_file, "w") as f:
             pass # reset! their code appends indefinitely! OMG!
 
-    # also, load the Generate+SelfRefine results    
-    _names_list_selfrefine = [model_name, f"samples_{num_samples}"]
-    if vllm_reasoning and use_vllm:
-        _names_list_selfrefine.append("reasoning")
-    if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
-        _names_list_selfrefine.append(openai_reasoning_effort)
-    if use_verigrad: _names_list_selfrefine.append("verigrad")
-    _names_list_selfrefine.append("SelfRefine")
-    sub_folder = "-".join(_names_list_selfrefine)
-    results_path_selfrefine = os.path.join("benchmark_results", sub_folder)
-    # Results file
-    results_file_selfrefine = os.path.join(results_path_selfrefine, "results.jsonl")
-    # results_data_selfrefine = load_jsonl(results_file_selfrefine) # NOT USED
-    # Yosys evals file (these require GT to get) -- Not needed!
-    # yosys_evals_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_evals.jsonl")
-    # yosys_evals_results_selfrefine = load_jsonl(yosys_evals_filename_selfrefine)
-    # Yosys syntax checks file (these don't require GT to get)
-    yosys_syntaxchecks_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_syntax_checks.jsonl")
-    # yosys_syntaxchecks_results_selfrefine = load_jsonl(yosys_syntaxchecks_filename_selfrefine) # NOT USED
-
-    question_list = []
-    verified_benchmark_dict_list = []
-    for data in benchmark_data:
-        if not data['verified']: continue
-        for _ in range(num_samples):
-            # qdata = data['question']
-            qdata = GENERATE_COT_PROMPT.format(code_task=data['question'])
-            if use_verigrad: qdata+=verigrad
-            question_list.append(qdata)
-            verified_benchmark_dict_list.append(data)
-        # break
-
-    random.seed(42)
+    question_list, verified_benchmark_dict_list= \
+        get_benchmark_lists(benchmark_data, num_samples, verilogeval)
 
     loop = asyncio.get_event_loop()
     num_batches = (len(question_list) + batch_size - 1) // batch_size
@@ -134,9 +103,15 @@ if __name__ == "__main__":
 
         questions_batch = question_list[i : i + batch_size]
         if use_vllm:
-            batch_runs = [get_vllm_response(q, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning) for q in questions_batch]
+            batch_runs = [
+                get_vllm_response(GENERATE_COT_PROMPT.format(code_task=q), model_name, temperature=temperature, vllm_reasoning=vllm_reasoning) 
+                for q in questions_batch
+            ]
         else:
-            batch_runs = [get_openai_response(q, model_name, openai_reasoning_effort=openai_reasoning_effort) for q in questions_batch]
+            batch_runs = [
+                get_openai_response(GENERATE_COT_PROMPT.format(code_task=q), model_name, openai_reasoning_effort=openai_reasoning_effort) 
+                for q in questions_batch
+            ]
         llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
 
         for j, llm_response in enumerate(llm_responses):
