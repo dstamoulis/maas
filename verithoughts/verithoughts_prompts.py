@@ -71,7 +71,7 @@ Do not include any additional text or explanation!
 """
 
 DEBATE_PROMPT = """
-Given a Verilog code task and a set of FOUR candidate solutions that were generated for that task,  
+Given a Verilog code task and a set of candidate solutions that were generated for that task,  
 your job is to analyze them and identify the one most likely to be incorrect or fail the specification.
 
 ### Code Task
@@ -89,14 +89,14 @@ First, reflect in detail on your thought process. Make sure to evaluate each can
 * **Truth-Table Coverage**: For combinational solutions, verify that all input combinations are covered and that no race conditions or latches are introduced.  
 * **Interface Consistency**: The port names, directions, and widths must exactly match the task specification in every solution.
 
-After your detailed reflection, output **only** the single letter ID (A, B, C, or D) corresponding to the candidate you judge **most likely to be incorrect**.  
+After your detailed reflection, output **only** the single letter ID (A, B, ...) corresponding to the candidate you judge **most likely to be incorrect**.  
 Make sure your choice is one of the provided letter IDs and nothing else.  
 Do **not** include any additional explanation or text—only the letter.
 """
 
 
 DEBATE_PROMPT_SIMPLE = """
-Given a Verilog code task and a set of FOUR candidate solutions that were generated for that task,  
+Given a Verilog code task and a set of candidate solutions that were generated for that task,  
 your job is to analyze them and identify the one most likely to be incorrect or fail the specification.
 
 ### Code Task
@@ -114,7 +114,7 @@ First, reflect on your evaluation process against these clear criteria:
 * **Functional Coverage**: For purely combinational logic, check that every input scenario is addressed; for sequential logic, ensure all state transitions are defined.  
 * **Interface Matching**: Confirm that every solution exactly matches the specified port names, directions, and signal roles in the original task.
 
-After your detailed reflection, output **only** the single letter ID (A, B, C, or D) corresponding to the candidate you judge **most likely to be incorrect**.  
+After your detailed reflection, output **only** the single letter ID (A, B, ...) corresponding to the candidate you judge **most likely to be incorrect**.  
 Make sure your choice is one of the provided letter IDs and nothing else.  
 Do **not** include any additional explanation or text—only the letter.
 """

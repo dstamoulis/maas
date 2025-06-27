@@ -6,7 +6,6 @@ import re
 import sys
 import argparse
 import random
-import torch
 import logging
 import numpy as np
 from pyverilog.vparser.parser import parse
