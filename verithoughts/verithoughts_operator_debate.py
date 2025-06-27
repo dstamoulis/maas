@@ -11,6 +11,7 @@ import re
 from copy import deepcopy
 from datasets import load_dataset
 import asyncio
+import random
 
 # that's for vLLM
 from openai import OpenAI
@@ -28,6 +29,51 @@ from verithoughts_operator_generate import get_vllm_response, get_openai_respons
 
 
 
+# OpenAI-compatible API service with vLLM
+vllm_reasoning_models = ['Qwen/Qwen3'] # hardcoded!
+async def get_vllm_response_gated(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, vllm_reasoning=False, skip_call=False):
+
+    if skip_call: return "Skipped"
+
+    # start_time = time.time()
+    messages = [
+        {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
+        {"role": "user", "content": query}
+    ]
+    _extra_body_params={
+        "top_k": 20,
+    }
+    if not vllm_reasoning and any(model_name.startswith(prefix) for prefix in vllm_reasoning_models):
+        _extra_body_params["chat_template_kwargs"]= {"enable_thinking": False}
+    loop = asyncio.get_running_loop() # non-blocking!
+    init_response = await loop.run_in_executor(
+        None,
+        lambda: api_client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            max_tokens=32768,
+            temperature=temperature,
+            top_p=0.95,
+            extra_body=_extra_body_params,
+        )
+    )    
+    reasoning_track=init_response.choices[0].message.content
+    
+    decide_messages = [
+        {"role": "system", "content": "You are an response parsing/processing tool that tries to understand the choice being made given a reasoning decision!"},
+        {"role": "user", "content": DECIDE_PROMPT.format(reasoning_track=reasoning_track)}
+    ]
+
+    response = await api_client_async.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=decide_messages,
+        temperature=temperature,
+    )
+
+    # elapsed_time = round(time.time() - start_time, 4)
+    return response.choices[0].message.content
+
+
 
 if __name__ == "__main__":
         
@@ -36,6 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_vllm", action="store_true", help="Enable if you want to run with vLLM")
     parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
     parser.add_argument("--batch_size", type=int, default=20, help="Number of LLM requests to run concurrently")
+    parser.add_argument("--tourmanent_size", type=int, default=5, help="Number of ...")
     parser.add_argument("--vllm_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
     parser.add_argument(
         "--openai_reasoning_effort",
@@ -59,6 +106,7 @@ if __name__ == "__main__":
     model_name = args.model_name
     num_samples = args.num_samples
     batch_size = args.batch_size
+    tourmanent_size = args.tourmanent_size
 
     use_verigrad = args.use_verigrad
     use_vllm = args.use_vllm
@@ -66,7 +114,7 @@ if __name__ == "__main__":
     vllm_reasoning = args.vllm_reasoning
 
     # Following the MaAS naming
-    prompt_op = "SelfRefine"
+    prompt_op = "Debate"
 
     # NO! benchmark_data = load_json(args.benchmark_path)
     # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -81,7 +129,6 @@ if __name__ == "__main__":
         _names_list.append(openai_reasoning_effort)
     _names_list.append(prompt_op)
     if use_verigrad: _names_list.append("verigrad")
-    _names_list.append("GenerateCoT")
     sub_folder = "-".join(_names_list)
     print(sub_folder)
     results_path = os.path.join("benchmark_results", sub_folder)
@@ -95,24 +142,25 @@ if __name__ == "__main__":
         with open(results_file, "w") as f:
             pass # reset! their code appends indefinitely! OMG!
 
-    # also, load the Generate results    
-    _names_list_generate = [model_name, f"samples_{num_samples}"]
+    # also, load the Generate+SelfRefine results    
+    _names_list_selfrefine = [model_name, f"samples_{num_samples}"]
     if vllm_reasoning and use_vllm:
-        _names_list_generate.append("reasoning")
+        _names_list_selfrefine.append("reasoning")
     if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
-        _names_list_generate.append(openai_reasoning_effort)
-    if use_verigrad: _names_list_generate.append("verigrad")
-    sub_folder = "-".join(_names_list_generate)
-    results_path_generate = os.path.join("benchmark_results", sub_folder)
+        _names_list_selfrefine.append(openai_reasoning_effort)
+    if use_verigrad: _names_list_selfrefine.append("verigrad")
+    _names_list_selfrefine.append("MultiRefine")
+    sub_folder = "-".join(_names_list_selfrefine)
+    results_path_selfrefine = os.path.join("benchmark_results", sub_folder)
     # Results file
-    results_file_generate = os.path.join(results_path_generate, "results.jsonl")
-    results_data_generate = load_jsonl(results_file_generate)
+    results_file_selfrefine = os.path.join(results_path_selfrefine, "results.jsonl")
+    results_data_selfrefine = load_jsonl(results_file_selfrefine)
     # Yosys evals file (these require GT to get) -- Not needed!
-    # yosys_evals_filename_generate = os.path.join(results_path_generate, "yosys_evals.jsonl")
-    # yosys_evals_results_generate = load_jsonl(yosys_evals_filename_generate)
+    # yosys_evals_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_evals.jsonl")
+    # yosys_evals_results_selfrefine = load_jsonl(yosys_evals_filename_selfrefine)
     # Yosys syntax checks file (these don't require GT to get)
-    yosys_syntaxchecks_filename_generate = os.path.join(results_path_generate, "yosys_syntax_checks.jsonl")
-    yosys_syntaxchecks_results_generate = load_jsonl(yosys_syntaxchecks_filename_generate)
+    yosys_syntaxchecks_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_syntax_checks.jsonl")
+    yosys_syntaxchecks_results_selfrefine = load_jsonl(yosys_syntaxchecks_filename_selfrefine)
 
 
     question_list = []
@@ -127,6 +175,8 @@ if __name__ == "__main__":
             verified_benchmark_dict_list.append(data)
         # break
 
+    random.seed(42)
+
     loop = asyncio.get_event_loop()
     num_batches = (len(question_list) + batch_size - 1) // batch_size
     for i in tqdm(range(0, len(question_list), batch_size), total=num_batches, desc="Processing VeriThought batches!!"):
@@ -134,25 +184,73 @@ if __name__ == "__main__":
 
         questions_batch = question_list[i : i + batch_size]
         batch_runs = []
+
+        for j0 in range(0, len(questions_batch), tournament_size):
+            tournament_batch = questions_batch[j0 : j0 + tournament_size]
+
+            tournament_idxs = []
+            solutions_list = []
+
+            for j1, question in enumerate(tournament_batch):
+
+                # flat index = outer offset + inner offset + position in tournament
+                idx = i + j0 + j1
+                q_id = idx // num_samples
+                sample_id = idx % num_samples
+
+                tournament_idxs.append(q_id)
+                result_selfrefine = get_result_entry(results_data_selfrefine, q_id, sample_id)
+                solutions_list.append(result_selfrefine['generated_code'])
+
+            # TO BE SAFE!
+            assert len(set(tournament_idxs)) == 1, f"Found mixed question_ids: {set(tournament_idxs)}"
+
+            answer_mapping = {}
+            solution_text = ""
+            for index, solution in enumerate(solutions_list):
+                answer_mapping[chr(65 + index)] = index
+                solution_text += f"***SOLUTION LETTER {chr(65 + index)} START***\n{str(solution)}\n***SOLUTION LETTER {chr(65 + index)} END***\n\n"
+
+            llm_question = DEBATE_PROMPT_SIMPLE.format(code_task=question, solutions=solution_text)
+
+            if use_vllm:
+                batch_runs.append(get_vllm_response_gated(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning))
+            else:
+                batch_runs.append(get_openai_response(llm_question, model_name, openai_reasoning_effort=openai_reasoning_effort))
+
+        llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
+
+        assert len(llm_responses) == batch_size // tournament_size
+
+        weakest_link_idxs = []
+        for j0, llm_response in enumerate(llm_responses):
+            answer = llm_response.strip().upper()
+            if answer in answer_mapping:
+                weakest_link_idxs.append(answer_mapping[answer])
+            else:
+                weakest_link_idxs.append(-1)
+
+        questions_batch = question_list[i : i + batch_size]
+        batch_runs = []
         for j, question in enumerate(questions_batch):
             idx = i + j
             q_id = idx // num_samples
             sample_id = idx % num_samples
-            result_generate = get_result_entry(results_data_generate, q_id, sample_id)
-            yosys_syntaxcheck_dict_generate = get_result_entry(yosys_syntaxchecks_results_generate, q_id, sample_id)
-            success=yosys_syntaxcheck_dict_generate['success']
-            error_log=yosys_syntaxcheck_dict_generate['error_log']
 
-            # create question for self-reflect
-            if success:
-                llm_question = question + INSTR_SIMPLE
-            else:
-                llm_question = question + SELFREFINE_PROMPT_FROM_YOSYS_TEST.format(code_task=question, solution=result_generate['generated_code'], test_fail=error_log)
+            tournament_group_idx = j // tournament_size         # which tournament this question is in
+            pos_in_tournament_group = j % tournament_size       # position within that tournament
+
+
+            llm_question = question + GENERATE_COT_PROMPT
+
+            # if this matches the weakest position for that tournament, it’s one to drop:
+            skip_this_call = (pos_in_group == weakest_link_idxs[group_idx])
 
             if use_vllm:
-                batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=success))
+                batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=succeskip_this_callss))
             else:
-                batch_runs.append(get_openai_response(llm_question, model_name, openai_reasoning_effort=openai_reasoning_effort, skip_call=success))
+                batch_runs.append(get_openai_response(llm_question, model_name, openai_reasoning_effort=openai_reasoning_effort, skip_call=skip_this_call))
+
 
         llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
 
@@ -162,13 +260,19 @@ if __name__ == "__main__":
             question = question_list[idx]
             q_id = idx // num_samples
             sample_id = idx % num_samples
+
+            tournament_group_idx = j // tournament_size         # which tournament this question is in
+            pos_in_tournament_group = j % tournament_size       # position within that tournament
         
             # duplicate but anyway!
             result_generate = get_result_entry(results_data_generate, q_id, sample_id)
             yosys_syntaxcheck_dict_generate = get_result_entry(yosys_syntaxchecks_results_generate, q_id, sample_id)
             success=yosys_syntaxcheck_dict_generate['success']
             error_log=yosys_syntaxcheck_dict_generate['error_log']
-            if success:
+
+            # if this matches the weakest position for that tournament, it’s one to drop:
+            skip_this_call = (pos_in_group == weakest_link_idxs[group_idx])
+            if skip_this_call:
                 assert llm_response == "Skipped"
                 generated_code = result_generate['generated_code'] # reuse!
                 llm_response_final = result_generate['full_response'] # reuse!

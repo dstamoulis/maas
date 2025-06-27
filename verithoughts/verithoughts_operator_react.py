@@ -118,8 +118,8 @@ if __name__ == "__main__":
     for data in benchmark_data:
         if not data['verified']: continue
         for _ in range(num_samples):
-            # qdata = data['question'] + INSTR_REASONING if vllm_reasoning else data['question'] + INSTR_SIMPLE
-            qdata = data['question'] # + INSTR_SIMPLE will add this later on!
+            # qdata = data['question']
+            qdata = REACT_PROMPT.format(code_task=data['question'])
             if use_verigrad: qdata+=verigrad
             question_list.append(qdata)
             verified_benchmark_dict_list.append(data)
@@ -133,32 +133,10 @@ if __name__ == "__main__":
         if i < already_done: continue
 
         questions_batch = question_list[i : i + batch_size]
-        batch_runs = []
-        for j, question in enumerate(questions_batch):
-            idx = i + j
-            q_id = idx // num_samples
-            sample_id = idx % num_samples
-
-            # # randomly sample 5 "existing solution" -- Follows MaAS' ScEnsemble(Operator)
-            # solutions_list = []
-            # solution_indices = random.sample(range(num_samples), 2)
-            # for solution_idx in solution_indices:
-            #     result_selfrefine = get_result_entry(results_data_selfrefine, q_id, solution_idx)
-            #     solutions_list.append(result_selfrefine['generated_code'])
-
-            # answer_mapping = {}
-            # solution_text = ""
-            # for index, solution in enumerate(solutions_list):
-            #     answer_mapping[chr(65 + index)] = index
-            #     solution_text += f"***INIT GUESS SOLUTION {chr(65 + index)} START***\n{str(solution)}\n***INIT GUESS SOLUTION {chr(65 + index)} END***\n\n"
-
-            llm_question = REACT_PROMPT.format(code_task=question)
-
-            if use_vllm:
-                batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning))
-            else:
-                batch_runs.append(get_openai_response(llm_question, model_name, openai_reasoning_effort=openai_reasoning_effort))
-
+        if use_vllm:
+            batch_runs = [get_vllm_response(q, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning) for q in questions_batch]
+        else:
+            batch_runs = [get_openai_response(q, model_name, openai_reasoning_effort=openai_reasoning_effort) for q in questions_batch]
         llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
 
         for j, llm_response in enumerate(llm_responses):
@@ -167,14 +145,6 @@ if __name__ == "__main__":
             question = question_list[idx]
             q_id = idx // num_samples
             sample_id = idx % num_samples
-        
-            # answer = llm_response.strip().upper()
-            # if answer in answer_mapping:
-            #     generated_code = solutions_list[answer_mapping[answer]]
-            # else: # fallback: pick a random valid index
-            #     random_fallback = random.choice(list(answer_mapping.values()))
-            #     generated_code = solutions_list[random_fallback]
-            # llm_response_final = llm_response
 
             generated_code = extract_code_block(llm_response)
             llm_response_final = llm_response
