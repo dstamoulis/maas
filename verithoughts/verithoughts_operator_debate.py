@@ -250,7 +250,7 @@ if __name__ == "__main__":
             # print(skip_this_call, pos_in_tournament_group, weakest_link_idxs[tournament_group_idx])
 
             if use_vllm:
-                batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=succeskip_this_callss))
+                batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=skip_this_call))
             else:
                 batch_runs.append(get_openai_response(llm_question, model_name, openai_reasoning_effort=openai_reasoning_effort, skip_call=skip_this_call))
 
