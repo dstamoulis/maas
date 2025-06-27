@@ -210,7 +210,6 @@ if __name__ == "__main__":
         if not os.path.exists(source_yosys_syntaxchecks_filename): 
             sys.stderr.write("[ERROR] `yosys_syntax_checks` not found! Make sure to run evaluation_syntax_check first!!\n")
             raise SystemExit(1)
-
         source_yosys_syntaxchecks_results = load_jsonl(source_yosys_syntaxchecks_filename)
 
     question_list, verified_benchmark_dict_list= \
@@ -243,10 +242,10 @@ if __name__ == "__main__":
                 source_yosys_syntaxcheck = get_result_entry(source_yosys_syntaxchecks_results, q_id, sample_id)
                 success=source_yosys_syntaxcheck['success']
                 error_log=source_yosys_syntaxcheck['error_log']
-                if not success:
-                    q_prompt = REFINE_PROMPT.format(code_task=q, solution=source_result['generated_code'], test_fail=error_log)
-                else:
+                if success:
                     q_skip = True
+                else:
+                    q_prompt = REFINE_PROMPT.format(code_task=q, solution=source_result['generated_code'], test_fail=error_log)
 
             questions_skip.append(q_skip)
             questions_batch_prompts.append(q_prompt)
@@ -286,7 +285,6 @@ if __name__ == "__main__":
                 generated_code = extract_code_block(llm_response)
                 llm_response_final = llm_response
             
-            generated_code = extract_code_block(llm_response)
             reply_dict = {
                 "q_id": q_id,
                 "sample_id": sample_id,
