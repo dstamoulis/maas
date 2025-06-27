@@ -101,7 +101,7 @@ if __name__ == "__main__":
     if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
         _names_list_generate.append(openai_reasoning_effort)
     if use_verigrad: _names_list_generate.append("verigrad")
-    _names_list_selfrefine.append("GenerateCoT")
+    _names_list_generate.append("GenerateCoT")
     sub_folder = "-".join(_names_list_generate)
     results_path_generate = os.path.join("benchmark_results", sub_folder)
     # Results file
