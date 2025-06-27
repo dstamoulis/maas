@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
             # create question for self-reflect
             if success:
-                llm_question = question + INSTR_SIMPLE
+                llm_question = question + GENERATE_COT_PROMPT
             else:
                 llm_question = question + SELFREFINE_PROMPT_FROM_YOSYS_TEST.format(code_task=question, solution=result_generate['generated_code'], test_fail=error_log)
 

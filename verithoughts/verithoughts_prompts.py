@@ -18,8 +18,6 @@ You are the best Verilog designer I know pal! You can do this =)
 
 """
 
-
-
 INSTR_REASONING = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.<think>\n"
 
 SELFREFINE_PROMPT_FROM_YOSYS_TEST = """
@@ -37,6 +35,13 @@ you need to analyze the reason for the failure and propose a better code solutio
 
 Please reflect on the failed test cases and code solution to understand the root of the issue.
 Based on this, your task is to provide new corrected code solution that addresses the issue.
+
+Some tips if helpful!
+ 
+* Might be useful to understand fully whether the task requires combinational or sequential logic. 
+
+* Also, always good to double-check that the interface (inputs/outputs) in your solution matches the names and bit widths described in the task.
+
 
 Make sure your input and output interface has the same names as described in the question. 
 Please start your new corrected Verilog code solution with CODE BEGIN and end with CODE END.
