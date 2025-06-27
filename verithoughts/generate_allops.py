@@ -22,7 +22,7 @@ api_client = OpenAI(
 from openai import AsyncOpenAI
 api_client_async = AsyncOpenAI()
 
-from verithoughts_utils import extract_code_block, load_jsonl_file
+from verithoughts_utils import extract_code_block, load_jsonl_file, load_jsonl, get_result_entry
 from verithoughts_prompts import *
 
 # OpenAI-compatible API service with vLLM
@@ -110,13 +110,14 @@ def get_benchmark_lists(benchmark_data, num_samples, verilogeval=False):
     return question_list, verified_benchmark_dict_list
 
 
-def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest):
+def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest, refine_op=False):
     _names_list = [model_name, f"samples_{num_samples}"]
     if vllm_reasoning and use_vllm:
         _names_list.append("reasoning")
     if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
         _names_list.append(openai_reasoning_effort)
     _names_list.append(prompt_op)
+    if refine_op: _names_list.append("Refine")
     sub_folder = "-".join(_names_list)
     results_path = os.path.join(benchmark_results_dest, sub_folder)
     os.makedirs(results_path, exist_ok=True)
@@ -152,6 +153,7 @@ if __name__ == "__main__":
         default="Generate",
         help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
     ) # Following the MaAS naming
+    parser.add_argument("--refine_op", action="store_true", help="Enable if you want to refine that op")
     args = parser.parse_args()
 
     temperature=args.temperature
@@ -164,6 +166,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     verilogeval = args.verilogeval
     prompt_op = args.prompt_op
+    refine_op = args.refine_op
 
     use_verigrad = args.use_verigrad
     use_vllm = args.use_vllm
@@ -180,8 +183,12 @@ if __name__ == "__main__":
         benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
         benchmark_results_dest = "benchmark_results"
 
-    # Directory: benchmark_results/{model_name}/
-    results_file, results_path = get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest)
+    # Destination Directory: benchmark_results/{....}/
+    results_file, results_path =\
+        get_results_filepath(model_name, num_samples, vllm_reasoning, 
+                            use_vllm, prompt_op, benchmark_results_dest,
+                            refine_op)
+
     if resume_gen and os.path.exists(results_file):
         existing_results = load_jsonl_file(results_file)
         already_done = len(existing_results) # // num_samples: will match since in dir-name!
@@ -189,6 +196,22 @@ if __name__ == "__main__":
         already_done = 0
         with open(results_file, "w") as f:
             pass # reset! their code appends indefinitely! OMG!
+
+    # Source (for refine if set!)
+    source_yosys_syntaxchecks_filename = None
+    source_yosys_syntaxchecks_results = None
+    source_results_file = source_results_path = None
+    if refine_op:
+        source_results_file, source_results_path =\
+            get_results_filepath(model_name, num_samples, vllm_reasoning, 
+                                use_vllm, prompt_op, benchmark_results_dest)
+        source_results = load_jsonl_file(source_results_file)
+        source_yosys_syntaxchecks_filename = os.path.join(source_results_path, "yosys_syntax_checks.jsonl")
+        if not os.path.exists(source_yosys_syntaxchecks_filename): 
+            sys.stderr.write("[ERROR] `yosys_syntax_checks` not found! Make sure to run evaluation_syntax_check first!!\n")
+            raise SystemExit(1)
+
+        source_yosys_syntaxchecks_results = load_jsonl(source_yosys_syntaxchecks_filename)
 
     question_list, verified_benchmark_dict_list= \
         get_benchmark_lists(benchmark_data, num_samples, verilogeval)
@@ -200,26 +223,43 @@ if __name__ == "__main__":
 
         questions_batch = question_list[i : i + batch_size]
         questions_batch_prompts = []
-        for q in questions_batch:
+        questions_skip = []
+        for j, q in enumerate(questions_batch):
             if prompt_op == "Generate":
-                q_prompt = q+ GENERATE_PROMPT
+                q_prompt = q + GENERATE_PROMPT
             elif prompt_op == "GenerateCoT":
                 q_prompt = GENERATE_COT_PROMPT.format(code_task=q)
             elif prompt_op == "ReAct":
                 q_prompt = REACT_PROMPT.format(code_task=q)
             elif prompt_op == "ReActSimple":
                 q_prompt = REACT_PROMPT_SIMPLE.format(code_task=q)
+            
+            q_skip = False
+            if refine_op:
+                idx = i + j
+                q_id = idx // num_samples
+                sample_id = idx % num_samples
+                source_result = get_result_entry(source_results, q_id, sample_id)
+                source_yosys_syntaxcheck = get_result_entry(source_yosys_syntaxchecks_results, q_id, sample_id)
+                success=source_yosys_syntaxcheck['success']
+                error_log=source_yosys_syntaxcheck['error_log']
+                if not success:
+                    q_prompt = REFINE_PROMPT.format(code_task=q, solution=source_result['generated_code'], test_fail=error_log)
+                else:
+                    q_skip = True
+
+            questions_skip.append(q_skip)
             questions_batch_prompts.append(q_prompt)
 
         if use_vllm:
             batch_runs = [
-                get_vllm_response(q, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning) 
-                for q in questions_batch_prompts
+                get_vllm_response(q, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=questions_skip[j]) 
+                for j, q in enumerate(questions_batch_prompts)
             ]
         else:
             batch_runs = [
-                get_openai_response(q, model_name, openai_reasoning_effort=openai_reasoning_effort) 
-                for q in questions_batch_prompts
+                get_openai_response(q, model_name, openai_reasoning_effort=openai_reasoning_effort, skip_call=questions_skip[j]) 
+                for j, q in enumerate(questions_batch_prompts)
             ]
         llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
 
@@ -230,11 +270,27 @@ if __name__ == "__main__":
             q_id = idx // num_samples
             sample_id = idx % num_samples
         
+            if refine_op:
+                source_result = get_result_entry(source_results, q_id, sample_id)
+                source_yosys_syntaxcheck = get_result_entry(source_yosys_syntaxchecks_results, q_id, sample_id)
+                success=source_yosys_syntaxcheck['success']
+                error_log=source_yosys_syntaxcheck['error_log']
+                if success:
+                    assert llm_response == "Skipped"
+                    generated_code = source_result['generated_code'] # reuse!
+                    llm_response_final = source_result['full_response'] # reuse!
+                else:
+                    generated_code = extract_code_block(llm_response)
+                    llm_response_final = llm_response
+            else:
+                generated_code = extract_code_block(llm_response)
+                llm_response_final = llm_response
+            
             generated_code = extract_code_block(llm_response)
             reply_dict = {
                 "q_id": q_id,
                 "sample_id": sample_id,
-                "full_response": llm_response,
+                "full_response": llm_response_final,
                 "generated_code": generated_code,
                 "ground_truth": benchmark_dict['ground_truth']
             }

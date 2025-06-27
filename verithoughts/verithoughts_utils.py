@@ -11,6 +11,23 @@ def load_jsonl_file(filename): # from original repo
             des_data.append(data)
     return des_data
 
+def load_json(filename):
+    des_data = []
+    with open(filename, 'r') as f:
+        for line in f:
+            data = json.loads(line)
+            des_data.append(data)
+    return des_data
+
+def load_jsonl(file_path):
+    data = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            item = json.loads(line.strip())
+            data.append(item)
+    return data
+
+
 def savefile(filename, content, fmode='w'):
     with open(filename, fmode) as f:
         f.write(content)
@@ -110,21 +127,6 @@ def parsing_helper(verilog_text, reasoning_mode):
     return parse1
 
 
-def load_json(filename):
-    des_data = []
-    with open(filename, 'r') as f:
-        for line in f:
-            data = json.loads(line)
-            des_data.append(data)
-    return des_data
-
-def load_jsonl(file_path):
-    data = []
-    with open(file_path, 'r') as file:
-        for line in file:
-            item = json.loads(line.strip())
-            data.append(item)
-    return data
 
 def pass_at_k(c_list, n, k):
     pass_at_k_values = []

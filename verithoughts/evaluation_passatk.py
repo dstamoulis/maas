@@ -121,6 +121,7 @@ if __name__ == "__main__":
         help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
     ) # Following the MaAS naming
     parser.add_argument("--verilogeval", action="store_true", help="Enable if you have the verilogeval dataset")
+    parser.add_argument("--refine_op", action="store_true", help="Enable if you want to refine that op")
     args = parser.parse_args()
 
     model_name = args.model_name
@@ -130,9 +131,9 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     prompt_op = args.prompt_op
     verilogeval = args.verilogeval
+    refine_op = args.refine_op
     if verilogeval: batch_size = 10 # 1GB yosys runs! wow!
     
-
     # 0) Pre-flight: fail fast if yosys doesn’t exist
     if shutil.which("yosys") is None:
         sys.stderr.write("[ERROR] `yosys` not found on PATH — aborting! Make sure you export it!!\n")
@@ -153,7 +154,10 @@ if __name__ == "__main__":
         benchmark_results_dest = "benchmark_results"
 
     # Directory: benchmark_results/{model_name}/
-    results_file, results_path = get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest)
+    results_file, results_path = \
+        get_results_filepath(model_name, num_samples, vllm_reasoning, 
+                            use_vllm, prompt_op, benchmark_results_dest,
+                            refine_op)
     results_data = load_jsonl(results_file)
     # Under that dir, have the tmp yosys files....
     tmpfiles_yosys_path = os.path.join(results_path, "tmp")
@@ -197,6 +201,8 @@ if __name__ == "__main__":
         correct_counter = sum(1 for sample in per_question_yosys_results_dict if sample['success']) # One-liner FTW!
         correct_counts.append(correct_counter)
 
+
+    print("Model:", os.path.basename(results_path))
     print("pass@1:", pass_at_k(correct_counts, num_samples, 1))
     print("pass@5:", pass_at_k(correct_counts, num_samples, 5))
     print("pass@10:", pass_at_k(correct_counts, num_samples, 10))

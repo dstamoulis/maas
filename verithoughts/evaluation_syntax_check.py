@@ -93,6 +93,7 @@ if __name__ == "__main__":
     model_name = args.model_name
     num_samples = args.num_samples
     vllm_reasoning = args.vllm_reasoning
+    use_vllm = args.use_vllm
     batch_size = args.batch_size
     prompt_op = args.prompt_op
     verilogeval = args.verilogeval
