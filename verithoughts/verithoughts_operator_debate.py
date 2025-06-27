@@ -82,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_vllm", action="store_true", help="Enable if you want to run with vLLM")
     parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
     parser.add_argument("--batch_size", type=int, default=20, help="Number of LLM requests to run concurrently")
-    parser.add_argument("--tourmanent_size", type=int, default=5, help="Number of ...")
+    parser.add_argument("--tournament_size", type=int, default=5, help="Number of ...")
     parser.add_argument("--vllm_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
     parser.add_argument(
         "--openai_reasoning_effort",
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     model_name = args.model_name
     num_samples = args.num_samples
     batch_size = args.batch_size
-    tourmanent_size = args.tourmanent_size
+    tournament_size = args.tournament_size
 
     use_verigrad = args.use_verigrad
     use_vllm = args.use_vllm
@@ -240,11 +240,10 @@ if __name__ == "__main__":
             tournament_group_idx = j // tournament_size         # which tournament this question is in
             pos_in_tournament_group = j % tournament_size       # position within that tournament
 
-
             llm_question = question + GENERATE_COT_PROMPT
 
             # if this matches the weakest position for that tournament, it’s one to drop:
-            skip_this_call = (pos_in_group == weakest_link_idxs[group_idx])
+            skip_this_call = (pos_in_tournament_group == weakest_link_idxs[tournament_group_idx])
 
             if use_vllm:
                 batch_runs.append(get_vllm_response(llm_question, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=succeskip_this_callss))
@@ -271,7 +270,7 @@ if __name__ == "__main__":
             error_log=yosys_syntaxcheck_dict_generate['error_log']
 
             # if this matches the weakest position for that tournament, it’s one to drop:
-            skip_this_call = (pos_in_group == weakest_link_idxs[group_idx])
+            skip_this_call = (pos_in_tournament_group == weakest_link_idxs[tournament_group_idx])
             if skip_this_call:
                 assert llm_response == "Skipped"
                 generated_code = result_generate['generated_code'] # reuse!

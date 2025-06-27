@@ -81,7 +81,6 @@ if __name__ == "__main__":
         _names_list.append(openai_reasoning_effort)
     _names_list.append(prompt_op)
     if use_verigrad: _names_list.append("verigrad")
-    _names_list.append("GenerateCoT")
     sub_folder = "-".join(_names_list)
     print(sub_folder)
     results_path = os.path.join("benchmark_results", sub_folder)
@@ -102,6 +101,7 @@ if __name__ == "__main__":
     if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
         _names_list_generate.append(openai_reasoning_effort)
     if use_verigrad: _names_list_generate.append("verigrad")
+    _names_list_selfrefine.append("GenerateCoT")
     sub_folder = "-".join(_names_list_generate)
     results_path_generate = os.path.join("benchmark_results", sub_folder)
     # Results file
@@ -113,7 +113,6 @@ if __name__ == "__main__":
     # Yosys syntax checks file (these don't require GT to get)
     yosys_syntaxchecks_filename_generate = os.path.join(results_path_generate, "yosys_syntax_checks.jsonl")
     yosys_syntaxchecks_results_generate = load_jsonl(yosys_syntaxchecks_filename_generate)
-
 
     question_list = []
     verified_benchmark_dict_list = []
