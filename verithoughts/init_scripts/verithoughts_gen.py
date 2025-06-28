@@ -102,13 +102,6 @@ if __name__ == "__main__":
         default="medium",
         help="How much reasoning effort to spend (one of: low, medium, high)."
     ) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
-    parser.add_argument(
-        "--prompt_op",
-        type=str,
-        choices=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop"],
-        default="Generate",
-        help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
-    ) # Following the MaAS naming
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
     parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") # Not used
@@ -129,8 +122,9 @@ if __name__ == "__main__":
     use_vllm = args.use_vllm
     openai_reasoning_effort = args.openai_reasoning_effort
     vllm_reasoning = args.vllm_reasoning
-    prompt_op = args.prompt_op
 
+    # Following the MaAS naming
+    prompt_op = "Generate"
 
     # NO! benchmark_data = load_json(args.benchmark_path)
     # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -143,8 +137,7 @@ if __name__ == "__main__":
         _names_list.append("reasoning")
     if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
         _names_list.append(openai_reasoning_effort)
-    if prompt_op is not "Generate":
-        _names_list.append(prompt_op)
+    # _names_list.append(prompt_op)
     if use_verigrad: _names_list.append("verigrad")
     sub_folder = "-".join(_names_list)
     results_path = os.path.join("benchmark_results", sub_folder)

@@ -154,3 +154,19 @@ def get_result_entry(results, q_id, sample_id):
     # If we get here, no matching entry was found
     raise ValueError(f"No result found for q_id={q_id}, sample_id={sample_id}")
 
+
+openai_reasoning_models = ['o4', 'o4-mini', 'o3', 'o3-mini'] # hardcoded!
+def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest, refine, self_refine, openai_reasoning_effort):
+    _names_list = [model_name, f"samples_{num_samples}"]
+    if vllm_reasoning and use_vllm:
+        _names_list.append("reasoning")
+    if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
+        _names_list.append(openai_reasoning_effort)
+    _names_list.append(prompt_op)
+    if self_refine: _names_list.append("SelfRefine")
+    if refine: _names_list.append("Refine")
+    sub_folder = "-".join(_names_list)
+    results_path = os.path.join(benchmark_results_dest, sub_folder)
+    os.makedirs(results_path, exist_ok=True)
+    results_file = os.path.join(results_path, "results.jsonl")
+    return results_file, results_path

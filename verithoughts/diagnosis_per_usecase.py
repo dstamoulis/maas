@@ -15,6 +15,7 @@ api_client = OpenAI()
 
 from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k, get_result_entry
 
+from generate_allops import get_results_filepath
 import pprint
 
 def debug_pretty_print(question_id, sample_id, result, yosys_checkresult_dict, reflection_result=None):
@@ -122,6 +123,25 @@ if __name__ == "__main__":
     parser.add_argument("--sample_id", type=int, default=0, help="the n-th sample for that question")
     parser.add_argument("--num_samples", type=int, default=20, help="Number of samples per question")
     parser.add_argument("--gpt_reflect", action="store_true", help="Get a GPT diagnosis in this call directly")
+    parser.add_argument("--vllm_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+    parser.add_argument(
+        "--openai_reasoning_effort",
+        type=str,
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="How much reasoning effort to spend (one of: low, medium, high)."
+    ) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
+    parser.add_argument("--use_vllm", action="store_true", help="Enable if you want to run with vLLM")
+    parser.add_argument(
+        "--prompt_op",
+        type=str,
+        choices=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "MultiRefine", "EarlyStop", "ReAct", "Debate"],
+        default="Generate",
+        help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
+    ) # Following the MaAS naming
+    parser.add_argument("--verilogeval", action="store_true", help="Enable if you have the verilogeval dataset")
+    parser.add_argument("--refine_op", action="store_true", help="Enable if you want to refine that op")
+    parser.add_argument("--self_refine_op", action="store_true", help="Enable if you want to use refine directly at runtime")
     args = parser.parse_args()
 
     model_name = args.model_name
@@ -129,22 +149,29 @@ if __name__ == "__main__":
     sample_id = args.sample_id
     gpt_reflect = args.gpt_reflect
     num_samples = args.num_samples
+    vllm_reasoning = args.vllm_reasoning
+    openai_reasoning_effort = args.openai_reasoning_effort
+    
+    use_vllm = args.use_vllm
+    prompt_op = args.prompt_op
+    verilogeval = args.verilogeval
+    refine_op = args.refine_op
+    self_refine_op = args.self_refine_op
 
-    # NO! parser.add_argument("--yosys_location", type=str, help="Absolute path to yosys environment.") JUST EXPORT IN PATH!!
-    # NO! yosys_location = args.yosys_location
-    # HECK NO! parser.add_argument("--old_data", action="store_true", help="Old data format") # WTH?
-
-    # NO! benchmark_data = load_json(args.benchmark_path)
-    # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
     # YES! Login using e.g. `huggingface-cli login` to access this dataset
     # benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+    if verilogeval:
+        benchmark_data = load_dataset("dakies/nvlabs-verilogeval-v2-spec-to-rtl", split="test")
+        benchmark_results_dest = "benchmark_results_verilogeval"
+    else:
+        benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+        benchmark_results_dest = "benchmark_results"
 
     # Directory: benchmark_results/{model_name}/
-    _names_list = [model_name, f"samples_{num_samples}"]
-    sub_folder = "-".join(_names_list)
-    results_path = os.path.join("benchmark_results", sub_folder)
-    os.makedirs(results_path, exist_ok=True)
-    results_file = os.path.join(results_path, "results.jsonl")
+    results_file, results_path =  \
+        get_results_filepath(model_name, num_samples, vllm_reasoning, 
+                            use_vllm, prompt_op, benchmark_results_dest,
+                            refine_op, self_refine_op, openai_reasoning_effort)
     results_data = load_jsonl(results_file)
     # Yosys evals file
     yosys_evals_filename = os.path.join(results_path, "yosys_evals.jsonl")
@@ -165,6 +192,5 @@ if __name__ == "__main__":
                 reflect_on_yosysrun(result['generated_code'], result['ground_truth'], yosys_checkresult_dict)
         else:
             print("Successful run; no need to GPT-reflect")
-
 
     debug_pretty_print(question_id, sample_id, result, yosys_checkresult_dict, reflection_result)

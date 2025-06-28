@@ -11,6 +11,8 @@ import re
 from copy import deepcopy
 from datasets import load_dataset
 import asyncio
+import copy
+import shutil
 
 # that's for vLLM
 from openai import OpenAI
@@ -22,14 +24,24 @@ api_client = OpenAI(
 from openai import AsyncOpenAI
 api_client_async = AsyncOpenAI()
 
-from verithoughts_utils import extract_code_block, load_jsonl_file, load_jsonl, get_result_entry
-from verithoughts_prompts import *
+from genops_utils import extract_code_block, load_jsonl_file, load_jsonl, get_result_entry, get_results_filepath
+from genops_prompts import *
+from evaluation_yosys import yosys_syntax_check
 
 # OpenAI-compatible API service with vLLM
 vllm_reasoning_models = ['Qwen/Qwen3'] # hardcoded!
-async def get_vllm_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, vllm_reasoning=False, skip_call=False):
+async def get_vllm_response(
+        query, 
+        model_name="Qwen/Qwen2.5-7B", 
+        temperature=0.6, 
+        vllm_reasoning=False, 
+        skip_call=False, 
+    ):
 
     if skip_call: return "Skipped"
+
+    # yosys_check_fail = True
+    # while yosys_check_fail:
 
     # start_time = time.time()
     messages = [
@@ -58,33 +70,57 @@ async def get_vllm_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6
 
 # Chat Completion API
 openai_reasoning_models = ['o4', 'o4-mini', 'o3', 'o3-mini'] # hardcoded!
-async def get_openai_response(query, model_name="gpt-4o-mini", temperature=0.6, openai_reasoning_effort="medium", top_p=0.95, skip_call=False):
+async def get_openai_response(
+        query, 
+        model_name="gpt-4o-mini", 
+        temperature=0.6, 
+        openai_reasoning_effort="medium", 
+        top_p=0.95, 
+        skip_call=False,
+    ):
     
     if skip_call: return "Skipped"
 
-    # start_time = time.time()
-    messages = [
-        {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
-        {"role": "user", "content": query}
-    ]
-    try:
-        if any(model_name.startswith(prefix) for prefix in openai_reasoning_models):
-            response = await api_client_async.chat.completions.create(
-                model=model_name,
-                reasoning_effort=openai_reasoning_effort,
-                messages=messages,
-            )
-        else:
-            response = await api_client_async.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=temperature,
-            )
+    yosys_check_fail = True
+    yosys_repeats = 0 
+    max_attempts = 2
+    while yosys_check_fail:
 
-        reply = response.choices[0].message.content
-    except Exception as e:
-        print(e)
-        reply = e
+        # start_time = time.time()
+        messages = [
+            {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
+            {"role": "user", "content": query}
+        ]
+        try:
+            if any(model_name.startswith(prefix) for prefix in openai_reasoning_models):
+                response = await api_client_async.chat.completions.create(
+                    model=model_name,
+                    reasoning_effort=openai_reasoning_effort,
+                    messages=messages,
+                )
+            else:
+                response = await api_client_async.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=temperature,
+                )
+
+            reply = response.choices[0].message.content
+        except Exception as e:
+            print(e)
+            reply = e
+
+        if self_refine:
+            # adapted (duplicate code!) from evaluation_syntax_check!
+
+            yosys_check_fail = False
+        else:
+            yosys_check_fail = False
+
+        yosys_repeats+=1 
+        if yosys_repeats >= max_attempts:
+            yosys_check_fail = False
+
     # elapsed_time = round(time.time() - start_time, 4)
     return reply 
 
@@ -109,20 +145,6 @@ def get_benchmark_lists(benchmark_data, num_samples, verilogeval=False):
 
     return question_list, verified_benchmark_dict_list
 
-
-def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest, refine_op=False):
-    _names_list = [model_name, f"samples_{num_samples}"]
-    if vllm_reasoning and use_vllm:
-        _names_list.append("reasoning")
-    if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
-        _names_list.append(openai_reasoning_effort)
-    _names_list.append(prompt_op)
-    if refine_op: _names_list.append("Refine")
-    sub_folder = "-".join(_names_list)
-    results_path = os.path.join(benchmark_results_dest, sub_folder)
-    os.makedirs(results_path, exist_ok=True)
-    results_file = os.path.join(results_path, "results.jsonl")
-    return results_file, results_path
 
 
 if __name__ == "__main__":
@@ -153,7 +175,8 @@ if __name__ == "__main__":
         default="Generate",
         help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
     ) # Following the MaAS naming
-    parser.add_argument("--refine_op", action="store_true", help="Enable if you want to refine that op")
+    parser.add_argument("--refine", action="store_true", help="Enable if you want to refine that op")
+    parser.add_argument("--self_refine", action="store_true", help="Enable if you want to use refine directly at runtime")
     args = parser.parse_args()
 
     temperature=args.temperature
@@ -166,12 +189,19 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     verilogeval = args.verilogeval
     prompt_op = args.prompt_op
-    refine_op = args.refine_op
+    refine = args.refine
+    self_refine = args.self_refine
 
     use_verigrad = args.use_verigrad
     use_vllm = args.use_vllm
     openai_reasoning_effort = args.openai_reasoning_effort
     vllm_reasoning = args.vllm_reasoning
+
+    # 0) Pre-flight: fail fast if yosys doesn’t exist
+    if self_refine or refine:
+        if shutil.which("yosys") is None:
+            sys.stderr.write("[ERROR] `yosys` not found on PATH — aborting! Make sure you export it!!\n")
+            raise SystemExit(1)
 
     # NO! benchmark_data = load_json(args.benchmark_path)
     # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -187,7 +217,7 @@ if __name__ == "__main__":
     results_file, results_path =\
         get_results_filepath(model_name, num_samples, vllm_reasoning, 
                             use_vllm, prompt_op, benchmark_results_dest,
-                            refine_op)
+                            refine, self_refine, openai_reasoning_effort)
 
     if resume_gen and os.path.exists(results_file):
         existing_results = load_jsonl_file(results_file)
@@ -197,14 +227,19 @@ if __name__ == "__main__":
         with open(results_file, "w") as f:
             pass # reset! their code appends indefinitely! OMG!
 
+    # Under that dir, have the tmp yosys files....
+    tmpfiles_yosys_path = os.path.join(results_path, "tmp")
+    os.makedirs(tmpfiles_yosys_path, exist_ok=True)
+
     # Source (for refine if set!)
     source_yosys_syntaxchecks_filename = None
     source_yosys_syntaxchecks_results = None
     source_results_file = source_results_path = None
-    if refine_op:
+    if refine:
         source_results_file, source_results_path =\
             get_results_filepath(model_name, num_samples, vllm_reasoning, 
-                                use_vllm, prompt_op, benchmark_results_dest)
+                                use_vllm, prompt_op, benchmark_results_dest,
+                                False, self_refine, openai_reasoning_effort)
         source_results = load_jsonl_file(source_results_file)
         source_yosys_syntaxchecks_filename = os.path.join(source_results_path, "yosys_syntax_checks.jsonl")
         if not os.path.exists(source_yosys_syntaxchecks_filename): 
@@ -217,7 +252,7 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
     num_batches = (len(question_list) + batch_size - 1) // batch_size
-    for i in tqdm(range(0, len(question_list), batch_size), total=num_batches, desc="Processing batches!!"):
+    for i in tqdm(range(0, len(question_list), batch_size), total=num_batches, desc="Solving verilog"):
         if i < already_done: continue
 
         questions_batch = question_list[i : i + batch_size]
@@ -234,7 +269,7 @@ if __name__ == "__main__":
                 q_prompt = REACT_PROMPT_SIMPLE.format(code_task=q)
             
             q_skip = False
-            if refine_op:
+            if refine:
                 idx = i + j
                 q_id = idx // num_samples
                 sample_id = idx % num_samples
@@ -262,14 +297,63 @@ if __name__ == "__main__":
             ]
         llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
 
-        for j, llm_response in enumerate(llm_responses):
+        llm_responses_refined = copy.deepcopy(llm_responses)
+
+        if self_refine:
+
+            max_retries = 4
+            retry_cnt = 0
+            questions_idx_succeeded = []
+            questions_succeeded = [False for _ in questions_batch_prompts]
+
+            while retry_cnt<=max_retries and (not all(questions_succeeded)):
+
+                syntax_batch_runs = [
+                    yosys_syntax_check(tmpfiles_yosys_path, extract_code_block(llm_response), skip_call=questions_succeeded[j])
+                    for j, llm_response in enumerate(llm_responses)
+                ]
+                yosys_checkresults = loop.run_until_complete(asyncio.gather(*syntax_batch_runs))
+
+                # Go again!
+                questions_succeeded = []
+                for j, yosys_checkresult in enumerate(yosys_checkresults):
+                    # print(j, yosys_checkresult)
+                    success = yosys_checkresult['success']
+                    questions_succeeded.append(success)
+                    if j in questions_idx_succeeded:
+                        assert llm_responses[j] == "Skipped"
+                    if success:
+                        if j not in questions_idx_succeeded:
+                            questions_succeeded[j] = True 
+                            llm_responses_refined[j] = copy.deepcopy(llm_responses[j])
+                            questions_idx_succeeded.append(j)
+                        else:
+                            assert yosys_checkresult['error_log'] == "Skipped"
+                    
+                if use_vllm:
+                    batch_runs = [
+                        get_vllm_response(q, model_name, temperature=temperature, vllm_reasoning=vllm_reasoning, skip_call=questions_succeeded[j]) 
+                        for j, q in enumerate(questions_batch_prompts)
+                    ]
+                else:
+                    batch_runs = [
+                        get_openai_response(q, model_name, openai_reasoning_effort=openai_reasoning_effort, skip_call=questions_succeeded[j]) 
+                        for j, q in enumerate(questions_batch_prompts)
+                    ]
+
+                llm_responses = loop.run_until_complete(asyncio.gather(*batch_runs))
+                retry_cnt+=1
+
+
+
+        for j, llm_response in enumerate(llm_responses_refined):
             idx = i + j
             benchmark_dict = verified_benchmark_dict_list[idx]
             question = question_list[idx]
             q_id = idx // num_samples
             sample_id = idx % num_samples
         
-            if refine_op:
+            if refine:
                 source_result = get_result_entry(source_results, q_id, sample_id)
                 source_yosys_syntaxcheck = get_result_entry(source_yosys_syntaxchecks_results, q_id, sample_id)
                 success=source_yosys_syntaxcheck['success']

@@ -11,7 +11,6 @@ import re
 from copy import deepcopy
 from datasets import load_dataset
 import asyncio
-import random
 
 # that's for vLLM
 from openai import OpenAI
@@ -23,9 +22,69 @@ api_client = OpenAI(
 from openai import AsyncOpenAI
 api_client_async = AsyncOpenAI()
 
-from verithoughts_utils import extract_code_block, load_jsonl_file, get_result_entry, load_jsonl
+from verithoughts_utils import extract_code_block, load_jsonl_file
 from verithoughts_prompts import *
-from verithoughts_operator_generate import get_vllm_response, get_openai_response, openai_reasoning_models, vllm_reasoning_models
+
+
+# OpenAI-compatible API service with vLLM
+vllm_reasoning_models = ['Qwen/Qwen3'] # hardcoded!
+async def get_vllm_response(query, model_name="Qwen/Qwen2.5-7B", temperature=0.6, vllm_reasoning=False):
+
+    # start_time = time.time()
+    messages = [
+        {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
+        {"role": "user", "content": query}
+    ]
+    _extra_body_params={
+        "top_k": 20,
+    }
+    if not vllm_reasoning and any(model_name.startswith(prefix) for prefix in vllm_reasoning_models):
+        _extra_body_params["chat_template_kwargs"]= {"enable_thinking": False}
+    loop = asyncio.get_running_loop() # non-blocking!
+    response = await loop.run_in_executor(
+        None,
+        lambda: api_client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            max_tokens=32768,
+            temperature=temperature,
+            top_p=0.95,
+            extra_body=_extra_body_params,
+        )
+    )
+    # elapsed_time = round(time.time() - start_time, 4)
+    return response.choices[0].message.content
+
+# Chat Completion API
+openai_reasoning_models = ['o4', 'o4-mini', 'o3', 'o3-mini'] # hardcoded!
+async def get_openai_response(query, model_name="gpt-4o-mini", temperature=0.6, openai_reasoning_effort="medium", top_p=0.95):
+
+    # start_time = time.time()
+    messages = [
+        {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
+        {"role": "user", "content": query}
+    ]
+    try:
+        if any(model_name.startswith(prefix) for prefix in openai_reasoning_models):
+            response = await api_client_async.chat.completions.create(
+                model=model_name,
+                reasoning_effort=openai_reasoning_effort,
+                messages=messages,
+            )
+        else:
+            response = await api_client_async.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=temperature,
+            )
+
+        reply = response.choices[0].message.content
+    except Exception as e:
+        print(e)
+        reply = e
+    # elapsed_time = round(time.time() - start_time, 4)
+    return reply 
+
 
 
 if __name__ == "__main__":
@@ -43,6 +102,13 @@ if __name__ == "__main__":
         default="medium",
         help="How much reasoning effort to spend (one of: low, medium, high)."
     ) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
+    parser.add_argument(
+        "--prompt_op",
+        type=str,
+        choices=["Generate", "GenerateCoT", "MultiGenerateCoT", "ScEnsemble", "Test", "SelfRefine", "EarlyStop"],
+        default="Generate",
+        help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
+    ) # Following the MaAS naming
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
     parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") # Not used
@@ -63,9 +129,8 @@ if __name__ == "__main__":
     use_vllm = args.use_vllm
     openai_reasoning_effort = args.openai_reasoning_effort
     vllm_reasoning = args.vllm_reasoning
+    prompt_op = args.prompt_op
 
-    # Following the MaAS naming
-    prompt_op = "ReActSimple"
 
     # NO! benchmark_data = load_json(args.benchmark_path)
     # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
@@ -78,10 +143,10 @@ if __name__ == "__main__":
         _names_list.append("reasoning")
     if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
         _names_list.append(openai_reasoning_effort)
-    _names_list.append(prompt_op)
+    if prompt_op is not "Generate":
+        _names_list.append(prompt_op)
     if use_verigrad: _names_list.append("verigrad")
     sub_folder = "-".join(_names_list)
-    print(sub_folder)
     results_path = os.path.join("benchmark_results", sub_folder)
     os.makedirs(results_path, exist_ok=True)
     results_file = os.path.join(results_path, "results.jsonl")
@@ -93,39 +158,17 @@ if __name__ == "__main__":
         with open(results_file, "w") as f:
             pass # reset! their code appends indefinitely! OMG!
 
-    # also, load the Generate+SelfRefine results    
-    _names_list_selfrefine = [model_name, f"samples_{num_samples}"]
-    if vllm_reasoning and use_vllm:
-        _names_list_selfrefine.append("reasoning")
-    if any(model_name.startswith(prefix) for prefix in openai_reasoning_models) and not use_vllm:
-        _names_list_selfrefine.append(openai_reasoning_effort)
-    if use_verigrad: _names_list_selfrefine.append("verigrad")
-    _names_list_selfrefine.append("SelfRefine")
-    sub_folder = "-".join(_names_list_selfrefine)
-    results_path_selfrefine = os.path.join("benchmark_results", sub_folder)
-    # Results file
-    results_file_selfrefine = os.path.join(results_path_selfrefine, "results.jsonl")
-    # results_data_selfrefine = load_jsonl(results_file_selfrefine) # NOT USED
-    # Yosys evals file (these require GT to get) -- Not needed!
-    # yosys_evals_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_evals.jsonl")
-    # yosys_evals_results_selfrefine = load_jsonl(yosys_evals_filename_selfrefine)
-    # Yosys syntax checks file (these don't require GT to get)
-    yosys_syntaxchecks_filename_selfrefine = os.path.join(results_path_selfrefine, "yosys_syntax_checks.jsonl")
-    # yosys_syntaxchecks_results_selfrefine = load_jsonl(yosys_syntaxchecks_filename_selfrefine) # NOT USED
-
     question_list = []
     verified_benchmark_dict_list = []
     for data in benchmark_data:
         if not data['verified']: continue
         for _ in range(num_samples):
-            # qdata = data['question']
-            qdata = REACT_PROMPT_SIMPLE.format(code_task=data['question'])
+            # qdata = data['question'] + INSTR_REASONING if vllm_reasoning else data['question'] + INSTR_SIMPLE
+            qdata = data['question'] + INSTR_SIMPLE
             if use_verigrad: qdata+=verigrad
             question_list.append(qdata)
             verified_benchmark_dict_list.append(data)
         # break
-
-    random.seed(42)
 
     loop = asyncio.get_event_loop()
     num_batches = (len(question_list) + batch_size - 1) // batch_size
@@ -145,14 +188,12 @@ if __name__ == "__main__":
             question = question_list[idx]
             q_id = idx // num_samples
             sample_id = idx % num_samples
-
+        
             generated_code = extract_code_block(llm_response)
-            llm_response_final = llm_response
-
             reply_dict = {
                 "q_id": q_id,
                 "sample_id": sample_id,
-                "full_response": llm_response_final,
+                "full_response": llm_response,
                 "generated_code": generated_code,
                 "ground_truth": benchmark_dict['ground_truth']
             }

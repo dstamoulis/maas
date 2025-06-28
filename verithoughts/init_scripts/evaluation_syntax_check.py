@@ -79,6 +79,13 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
     parser.add_argument("--batch_size", type=int, default=20, help="Number of yosys runs to run concurrently")
     parser.add_argument("--vllm_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+    parser.add_argument(
+        "--openai_reasoning_effort",
+        type=str,
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="How much reasoning effort to spend (one of: low, medium, high)."
+    ) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
     parser.add_argument("--use_vllm", action="store_true", help="Enable if you want to run with vLLM")
     parser.add_argument(
         "--prompt_op",
@@ -88,15 +95,21 @@ if __name__ == "__main__":
         help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
     ) # Following the MaAS naming
     parser.add_argument("--verilogeval", action="store_true", help="Enable if you have the verilogeval dataset")
+    parser.add_argument("--refine_op", action="store_true", help="Enable if you want to refine that op")
+    parser.add_argument("--self_refine_op", action="store_true", help="Enable if you want to use refine directly at runtime")
     args = parser.parse_args()
 
     model_name = args.model_name
     num_samples = args.num_samples
     vllm_reasoning = args.vllm_reasoning
+    openai_reasoning_effort = args.openai_reasoning_effort
+    
     use_vllm = args.use_vllm
     batch_size = args.batch_size
     prompt_op = args.prompt_op
     verilogeval = args.verilogeval
+    refine_op = args.refine_op
+    self_refine_op = args.self_refine_op
     if verilogeval: batch_size = 10 # 1GB yosys runs! wow!
 
     # 0) Pre-flight: fail fast if yosys doesn’t exist
@@ -119,7 +132,10 @@ if __name__ == "__main__":
         benchmark_results_dest = "benchmark_results"
 
     # Directory: benchmark_results/{model_name}/
-    results_file, results_path = get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest)
+    results_file, results_path =  \
+        get_results_filepath(model_name, num_samples, vllm_reasoning, 
+                            use_vllm, prompt_op, benchmark_results_dest,
+                            refine_op, self_refine_op, openai_reasoning_effort)
     results_data = load_jsonl(results_file)
 
     # Under that dir, have the tmp yosys files....
@@ -132,7 +148,7 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
     num_batches = (len(results_data) + batch_size - 1) // batch_size
-    for i in tqdm(range(0, len(results_data), batch_size), total=num_batches, desc="Running yosys checks batches!!"):
+    for i in tqdm(range(0, len(results_data), batch_size), total=num_batches, desc="Running yosys checks"):
 
         results_batch = results_data[i : i + batch_size]
         batch_runs = [
@@ -163,6 +179,6 @@ if __name__ == "__main__":
         correct_counter = sum(1 for sample in per_question_yosys_results_dict if sample['success']) # One-liner FTW!
         correct_counts.append(correct_counter)
 
-    print("pass@1:", pass_at_k(correct_counts, num_samples, 1))
-    print("pass@5:", pass_at_k(correct_counts, num_samples, 5))
-    print("pass@10:", pass_at_k(correct_counts, num_samples, 10))
+    if num_samples >= 1:  print("pass@1:", pass_at_k(correct_counts, num_samples, 1))
+    if num_samples >= 5:  print("pass@5:", pass_at_k(correct_counts, num_samples, 5))
+    if num_samples >= 10: print("pass@10:", pass_at_k(correct_counts, num_samples, 10))
