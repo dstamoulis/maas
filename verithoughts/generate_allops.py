@@ -13,6 +13,7 @@ from datasets import load_dataset
 import asyncio
 import copy
 import shutil
+import time
 
 # that's for vLLM
 from openai import OpenAI
@@ -24,8 +25,8 @@ api_client = OpenAI(
 from openai import AsyncOpenAI
 api_client_async = AsyncOpenAI()
 
-from genops_utils import extract_code_block, load_jsonl_file, load_jsonl, get_result_entry, get_results_filepath
-from genops_prompts import *
+from operators_utils import extract_code_block, load_jsonl_file, load_jsonl, get_result_entry, get_results_filepath
+from operators_prompts import *
 from evaluation_yosys import yosys_syntax_check
 
 # OpenAI-compatible API service with vLLM
@@ -38,12 +39,20 @@ async def get_vllm_response(
         skip_call=False, 
     ):
 
-    if skip_call: return "Skipped"
+    if skip_call: 
+        response_dict={
+            'response': "Skipped",
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'total_tokens': 0,
+            'time_elapsed': 0.0,
+        }
+        return response_dict
 
     # yosys_check_fail = True
     # while yosys_check_fail:
 
-    # start_time = time.time()
+    start_time = time.time()
     messages = [
         {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
         {"role": "user", "content": query}
@@ -65,8 +74,16 @@ async def get_vllm_response(
             extra_body=_extra_body_params,
         )
     )
-    # elapsed_time = round(time.time() - start_time, 4)
-    return response.choices[0].message.content
+    elapsed_time = round(time.time() - start_time, 4)
+    response_dict={
+        'response': response.choices[0].message.content,
+        'prompt_tokens': response.usage.prompt_tokens,
+        'completion_tokens': response.usage.completion_tokens,
+        'total_tokens': response.usage.total_tokens,
+        'time_elapsed': elapsed_time,
+    }
+
+    return response_dict
 
 # Chat Completion API
 openai_reasoning_models = ['o4', 'o4-mini', 'o3', 'o3-mini'] # hardcoded!
@@ -79,50 +96,61 @@ async def get_openai_response(
         skip_call=False,
     ):
     
-    if skip_call: return "Skipped"
+    if skip_call: 
+        response_dict={
+            'response': "Skipped",
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'total_tokens': 0,
+            'time_elapsed': 0.0,
+        }
+        return response_dict
 
-    yosys_check_fail = True
-    yosys_repeats = 0 
-    max_attempts = 2
-    while yosys_check_fail:
+    start_time = time.time()
+    prompt_tokens= 0
+    completion_tokens= 0
+    total_tokens= 0
 
-        # start_time = time.time()
-        messages = [
-            {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
-            {"role": "user", "content": query}
-        ]
-        try:
-            if any(model_name.startswith(prefix) for prefix in openai_reasoning_models):
-                response = await api_client_async.chat.completions.create(
-                    model=model_name,
-                    reasoning_effort=openai_reasoning_effort,
-                    messages=messages,
-                )
-            else:
-                response = await api_client_async.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=temperature,
-                )
-
-            reply = response.choices[0].message.content
-        except Exception as e:
-            print(e)
-            reply = e
-
-        if self_refine:
-            # adapted (duplicate code!) from evaluation_syntax_check!
-
-            yosys_check_fail = False
+    start_time = time.time()
+    messages = [
+        {"role": "system", "content": "You are an RTL expert generating Verilog code given a task description!"},
+        {"role": "user", "content": query}
+    ]
+    try:
+        if any(model_name.startswith(prefix) for prefix in openai_reasoning_models):
+            response = await api_client_async.chat.completions.create(
+                model=model_name,
+                reasoning_effort=openai_reasoning_effort,
+                messages=messages,
+            )
         else:
-            yosys_check_fail = False
+            response = await api_client_async.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=temperature,
+            )
 
-        yosys_repeats+=1 
-        if yosys_repeats >= max_attempts:
-            yosys_check_fail = False
+        reply = response.choices[0].message.content
+        prompt_tokens= response.usage.prompt_tokens
+        completion_tokens= response.usage.completion_tokens
+        total_tokens = response.usage.total_tokens
 
-    # elapsed_time = round(time.time() - start_time, 4)
-    return reply 
+    except Exception as e:
+        print(e)
+        reply = e
+        prompt_tokens= 0
+        completion_tokens= 0
+        total_tokens= 0
+
+    elapsed_time = round(time.time() - start_time, 4)
+    response_dict={
+        'response': reply,
+        'prompt_tokens': prompt_tokens,
+        'completion_tokens': completion_tokens,
+        'total_tokens': total_tokens,
+        'time_elapsed': elapsed_time,
+    }
+    return response_dict 
 
 
 def get_benchmark_lists(benchmark_data, num_samples, verilogeval=False):
@@ -165,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p")
     parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens") # Not used
-    parser.add_argument("--resume_gen", action="store_true", help="Enable if you want to continue from existing results.jsonl file")
+    parser.add_argument("--resume", action="store_true", help="Enable if you want to continue from existing results.jsonl file")
     parser.add_argument("--use_verigrad", action="store_true", help="Enable if you want to use verigrad")
     parser.add_argument("--verilogeval", action="store_true", help="Enable if you have the verilogeval dataset")
     parser.add_argument(
@@ -182,7 +210,7 @@ if __name__ == "__main__":
     temperature=args.temperature
     top_p = args.top_p
     max_tokens=args.max_tokens
-    resume_gen=args.resume_gen
+    resume=args.resume
 
     model_name = args.model_name
     num_samples = args.num_samples
@@ -219,7 +247,7 @@ if __name__ == "__main__":
                             use_vllm, prompt_op, benchmark_results_dest,
                             refine, self_refine, openai_reasoning_effort)
 
-    if resume_gen and os.path.exists(results_file):
+    if resume and os.path.exists(results_file):
         existing_results = load_jsonl_file(results_file)
         already_done = len(existing_results) # // num_samples: will match since in dir-name!
     else:
@@ -309,7 +337,7 @@ if __name__ == "__main__":
             while retry_cnt<=max_retries and (not all(questions_succeeded)):
 
                 syntax_batch_runs = [
-                    yosys_syntax_check(tmpfiles_yosys_path, extract_code_block(llm_response), skip_call=questions_succeeded[j])
+                    yosys_syntax_check(tmpfiles_yosys_path, extract_code_block(llm_response['response']), skip_call=questions_succeeded[j])
                     for j, llm_response in enumerate(llm_responses)
                 ]
                 yosys_checkresults = loop.run_until_complete(asyncio.gather(*syntax_batch_runs))
@@ -321,14 +349,19 @@ if __name__ == "__main__":
                     success = yosys_checkresult['success']
                     questions_succeeded.append(success)
                     if j in questions_idx_succeeded:
-                        assert llm_responses[j] == "Skipped"
+                        assert llm_responses[j]['response'] == "Skipped"
                     if success:
                         if j not in questions_idx_succeeded:
                             questions_succeeded[j] = True 
-                            llm_responses_refined[j] = copy.deepcopy(llm_responses[j])
+                            llm_responses_refined[j]['response'] = copy.deepcopy(llm_responses[j]['response'])
                             questions_idx_succeeded.append(j)
                         else:
                             assert yosys_checkresult['error_log'] == "Skipped"
+                    
+                    llm_responses_refined[j]['prompt_tokens'] += llm_responses[j]['prompt_tokens'] # will be 0 if skipped anyway
+                    llm_responses_refined[j]['completion_tokens'] += llm_responses[j]['completion_tokens'] # will be 0 if skipped anyway
+                    llm_responses_refined[j]['total_tokens'] += llm_responses[j]['total_tokens'] # will be 0 if skipped anyway
+                    llm_responses_refined[j]['time_elapsed'] += llm_responses[j]['time_elapsed'] # will be 0 if skipped anyway
                     
                 if use_vllm:
                     batch_runs = [
@@ -359,22 +392,39 @@ if __name__ == "__main__":
                 success=source_yosys_syntaxcheck['success']
                 error_log=source_yosys_syntaxcheck['error_log']
                 if success:
-                    assert llm_response == "Skipped"
+                    assert llm_response['response'] == "Skipped"
                     generated_code = source_result['generated_code'] # reuse!
                     llm_response_final = source_result['full_response'] # reuse!
+                    elapsed_time = source_result['time_elapsed'] # reuse!
+                    prompt_tokens = source_result['prompt_tokens'] # reuse!
+                    completion_tokens = source_result['completion_tokens'] # reuse!
+                    total_tokens = source_result['total_tokens'] # reuse!
                 else:
-                    generated_code = extract_code_block(llm_response)
-                    llm_response_final = llm_response
+                    generated_code = extract_code_block(llm_response['response'])
+                    llm_response_final = llm_response['response']
+                    elapsed_time = llm_response['time_elapsed']
+                    prompt_tokens = llm_response['prompt_tokens']
+                    completion_tokens = llm_response['completion_tokens']
+                    total_tokens = llm_response['total_tokens']
             else:
-                generated_code = extract_code_block(llm_response)
-                llm_response_final = llm_response
+                generated_code = extract_code_block(llm_response['response'])
+                llm_response_final = llm_response['response']
+                elapsed_time = llm_response['time_elapsed']
+                prompt_tokens = llm_response['prompt_tokens']
+                completion_tokens = llm_response['completion_tokens']
+                total_tokens = llm_response['total_tokens']
             
             reply_dict = {
                 "q_id": q_id,
                 "sample_id": sample_id,
+                "time_elapsed": elapsed_time,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
                 "full_response": llm_response_final,
                 "generated_code": generated_code,
                 "ground_truth": benchmark_dict['ground_truth']
             }
             with open(results_file, "a") as f:
                 f.write(json.dumps(reply_dict) + "\n")
+

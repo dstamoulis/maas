@@ -12,8 +12,8 @@ from tqdm import tqdm
 import uuid
 import asyncio
 
-from genops_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations
-from genops_utils import pass_at_k, clear_verilogfile, get_results_filepath
+from operators_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations
+from operators_utils import pass_at_k, clear_verilogfile, get_results_filepath
 
 
 async def yosys_syntax_check(tmpfiles_yosys_path, generated_code, keep_log_stdout=False, skip_call=False):
@@ -198,6 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("--refine", action="store_true", help="Enable if you want to refine that op")
     parser.add_argument("--self_refine", action="store_true", help="Enable if you want to use refine directly at runtime")
     parser.add_argument("--syntax_check", action="store_true", help="Enable if you want to just check syntax w/o GTs")
+    parser.add_argument("--cost_metrics", action="store_true", help="Enable if you want to just get LLM cost metrics w/o yosys")
     args = parser.parse_args()
 
     model_name = args.model_name
@@ -212,6 +213,7 @@ if __name__ == "__main__":
     refine = args.refine
     self_refine = args.self_refine
     syntax_check = args.syntax_check
+    cost_metrics = args.cost_metrics
 
     if verilogeval: batch_size = 10 # 1GB yosys runs! wow!
     
@@ -248,6 +250,28 @@ if __name__ == "__main__":
     yosys_evals_filename = os.path.join(results_path, yosys_evals_basename)
     with open(yosys_evals_filename, "w") as f:
         pass # reset! their code appends indefinitely! OMG!
+
+
+    if cost_metrics:
+
+        _print_msg = "Model: LLM cost averages"
+        print(_print_msg, os.path.basename(results_path))
+        print('\n'.join(
+            f"{label}: {sum(d[key] for d in results_data)/len(results_data):.2f}"
+            for label, key in [
+                ("Time elapsed",      "time_elapsed"),
+                ("Prompt tokens",     "prompt_tokens"),
+                ("Completion tokens", "completion_tokens"),
+                ("Total tokens",      "total_tokens"),
+            ]
+        ))
+        # for result_datapoint in results_data:
+        #     elapsed_time = result_datapoint['time_elapsed']
+        #     prompt_tokens = result_datapoint['prompt_tokens']
+        #     completion_tokens = result_datapoint['completion_tokens']
+        #     total_tokens = result_datapoint['total_tokens']
+        sys.exit()
+
 
     loop = asyncio.get_event_loop()
     num_batches = (len(results_data) + batch_size - 1) // batch_size
@@ -299,7 +323,8 @@ if __name__ == "__main__":
         correct_counter = sum(1 for sample in per_question_yosys_results_dict if sample['success']) # One-liner FTW!
         correct_counts.append(correct_counter)
 
-    print("Model:", os.path.basename(results_path))
+    _print_msg = "Model: Syntax check results:" if syntax_check else "Model: Formal Verification GT results:" 
+    print(_print_msg, os.path.basename(results_path))
     if num_samples >= 1:  print("pass@1:", pass_at_k(correct_counts, num_samples, 1))
     if num_samples >= 5:  print("pass@5:", pass_at_k(correct_counts, num_samples, 5))
     if num_samples >= 10: print("pass@10:", pass_at_k(correct_counts, num_samples, 10))
