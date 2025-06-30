@@ -352,7 +352,7 @@ if __name__ == "__main__":
 
         if self_refine:
 
-            max_retries = 4
+            max_retries = 3
             retry_cnt = 0
             questions_idx_succeeded = []
             questions_succeeded = [False for _ in questions_batch_prompts]
