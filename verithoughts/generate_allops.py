@@ -23,6 +23,7 @@ api_client = OpenAI(
 )
 # that's for OpenAI async
 from openai import AsyncOpenAI
+from openai import OpenAIError  # catch exception OpenAI client (some prompts complaint about policy)
 api_client_async = AsyncOpenAI()
 
 from operators_utils import extract_code_block, load_jsonl_file, load_jsonl, get_result_entry, get_results_filepath
@@ -117,6 +118,7 @@ async def get_openai_response(
         {"role": "user", "content": query}
     ]
     try:
+
         if any(model_name.startswith(prefix) for prefix in openai_reasoning_models):
             response = await api_client_async.chat.completions.create(
                 model=model_name,
@@ -135,22 +137,43 @@ async def get_openai_response(
         completion_tokens= response.usage.completion_tokens
         total_tokens = response.usage.total_tokens
 
-    except Exception as e:
-        print(e)
-        reply = e
-        prompt_tokens= 0
-        completion_tokens= 0
-        total_tokens= 0
+        elapsed_time = round(time.time() - start_time, 4)
+        response_dict={
+            'response': reply,
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'total_tokens': total_tokens,
+            'time_elapsed': elapsed_time,
+        }
+        return response_dict 
 
-    elapsed_time = round(time.time() - start_time, 4)
-    response_dict={
-        'response': reply,
-        'prompt_tokens': prompt_tokens,
-        'completion_tokens': completion_tokens,
-        'total_tokens': total_tokens,
-        'time_elapsed': elapsed_time,
-    }
-    return response_dict 
+    except OpenAIError as e:
+
+        # this will catch InvalidRequestError (400) and other API errors
+        reply = f"OpenAIError ({getattr(e, 'code', '')}): {e}"
+        print(reply)
+        elapsed_time = round(time.time() - start_time, 4)
+        response_dict={
+            'response': reply,
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'total_tokens': 0,
+            'time_elapsed': elapsed_time,
+        }
+        return response_dict 
+
+    except Exception as e:
+        reply = f"Calling OpenAI errorred out: {e}"
+        print(reply)
+        elapsed_time = round(time.time() - start_time, 4)
+        response_dict={
+            'response': reply,
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'total_tokens': 0,
+            'time_elapsed': elapsed_time,
+        }
+        return response_dict 
 
 
 def get_benchmark_lists(benchmark_data, num_samples, verilogeval=False):
