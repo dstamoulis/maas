@@ -13,8 +13,8 @@ import uuid
 import asyncio
 import time
 
-from verithoughts_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations, pass_at_k, clear_verilogfile
-
+from operators_utils import extract_code_block, savefile, load_jsonl, rename_modules_and_instantiations
+from operators_utils import pass_at_k, clear_verilogfile, get_results_filepath
 from yosys_utils import has_clk_signal, get_top_module
 from yosys_utils import parse_power, parse_delay, get_delay, parse_area
 
@@ -340,8 +340,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Arg Parse")
     parser.add_argument("--model_name", type=str, default="gpt-4o-mini", help="HF model name")
     parser.add_argument("--num_samples", type=int, default=1, help="Number of samples per question")
+    parser.add_argument("--use_vllm", action="store_true", help="Enable if you want to run with vLLM")
     parser.add_argument("--batch_size", type=int, default=20, help="Number of yosys runs to run concurrently")
-    parser.add_argument("--enable_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+    parser.add_argument("--vllm_reasoning", action="store_true", help="Enable if you have a reasoning mode triggered by <think>")
+    parser.add_argument(
+        "--openai_reasoning_effort",
+        type=str,
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="How much reasoning effort to spend (one of: low, medium, high)."
+    ) # Following OpenAI API: https://platform.openai.com/docs/guides/reasoning?api-mode=chat#get-started-with-reasoning
     parser.add_argument(
         "--prompt_op",
         type=str,
@@ -349,20 +357,36 @@ if __name__ == "__main__":
         default="Generate",
         help="Which LLM prompting technique to use (CoT, Ensemble, etc.)."
     ) # Following the MaAS naming
+    parser.add_argument("--verilogeval", action="store_true", help="Enable if you have the verilogeval dataset")
+    parser.add_argument("--refine", action="store_true", help="Enable if you want to refine that op")
+    parser.add_argument("--self_refine", action="store_true", help="Enable if you want to use refine directly at runtime")
     parser.add_argument('--liberty', type=str, default="skywater-pdk/libraries/sky130_fd_sc_hd/latest/timing/sky130_fd_sc_hd__tt_025C_1v80.lib", help="Liberty file to use for synthesis")
     parser.add_argument('--target_clock_period', type=int, help="Target clock period in ns", default=20)
     args = parser.parse_args()
 
     model_name = args.model_name
     num_samples = args.num_samples
-    enable_reasoning = args.enable_reasoning
+    vllm_reasoning = args.vllm_reasoning
+    openai_reasoning_effort = args.openai_reasoning_effort
+
+    use_vllm = args.use_vllm
     batch_size = args.batch_size
     prompt_op = args.prompt_op
+    verilogeval = args.verilogeval
+    refine = args.refine
+    self_refine = args.self_refine
 
     target_clock_period = args.target_clock_period
     liberty = args.liberty
 
-    # 0) Pre-flight: fail fast if yosys doesn’t exist
+    # 0) Pre-flight: fail fast if yosys or skywater don't exist
+    if not os.path.isfile(liberty):
+        sys.stderr.write(
+            f"Error: Liberty file not found at:\n  {liberty}\n"
+            "Please make sure you have copied there from SkyWater PDK.\n"
+        )
+        raise SystemExit(1)
+
     if shutil.which("yosys") is None:
         sys.stderr.write("[ERROR] `yosys` not found on PATH — aborting! Make sure you export it!!\n")
         raise SystemExit(1)
@@ -374,18 +398,18 @@ if __name__ == "__main__":
     # NO! benchmark_data = load_json(args.benchmark_path)
     # NO! parser.add_argument("--benchmark_path", type=str, default="VeriThoughtsBenchmark", help="Path to the benchmark jsonl")
     # YES! Login using e.g. `huggingface-cli login` to access this dataset
-    benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+    if verilogeval:
+        benchmark_data = load_dataset("dakies/nvlabs-verilogeval-v2-spec-to-rtl", split="test")
+        benchmark_results_dest = "benchmark_results_verilogeval"
+    else:
+        benchmark_data = load_dataset("wilyub/VeriThoughtsBenchmark", split="train")
+        benchmark_results_dest = "benchmark_results"
 
     # Directory: benchmark_results/{model_name}/
-    _names_list = [model_name, f"samples_{num_samples}"]
-    if enable_reasoning: _names_list.append("reasoning")
-    # if use_verigrad: _names_list.append("verigrad")
-    if prompt_op != "Generate":
-        _names_list.append(prompt_op)
-    sub_folder = "-".join(_names_list)
-    results_path = os.path.join("benchmark_results", sub_folder)
-    os.makedirs(results_path, exist_ok=True)
-    results_file = os.path.join(results_path, "results.jsonl")
+    results_file, results_path = \
+        get_results_filepath(model_name, num_samples, vllm_reasoning, 
+                            use_vllm, prompt_op, benchmark_results_dest,
+                            refine, self_refine, openai_reasoning_effort)
     results_data = load_jsonl(results_file)
     # Under that dir, have the tmp yosys files....
     tmpfiles_yosys_path = os.path.join(results_path, "tmp_synth")
