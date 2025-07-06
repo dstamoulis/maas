@@ -228,6 +228,7 @@ if __name__ == "__main__":
     ) # Following the MaAS naming
     parser.add_argument("--refine", action="store_true", help="Enable if you want to refine that op")
     parser.add_argument("--self_refine", action="store_true", help="Enable if you want to use refine directly at runtime")
+    parser.add_argument("--ppa_op", action="store_true", help="Enable if you want to use the PPA optimize prompt")
     args = parser.parse_args()
 
     temperature=args.temperature
@@ -242,6 +243,12 @@ if __name__ == "__main__":
     prompt_op = args.prompt_op
     refine = args.refine
     self_refine = args.self_refine
+    ppa_op = args.ppa_op
+    if ppa_op:
+        if prompt_op != "GenerateCoT":
+            sys.stderr.write("[ERROR] PPA Prompting is supported as GenerateCoT variant. Relaunch with --prompt_op GenerateCoT\n")
+            raise SystemExit(1)
+    
 
     use_verigrad = args.use_verigrad
     use_vllm = args.use_vllm
@@ -268,7 +275,7 @@ if __name__ == "__main__":
     results_file, results_path =\
         get_results_filepath(model_name, num_samples, vllm_reasoning, 
                             use_vllm, prompt_op, benchmark_results_dest,
-                            refine, self_refine, openai_reasoning_effort)
+                            refine, self_refine, openai_reasoning_effort, ppa_op)
 
     if resume and os.path.exists(results_file):
         existing_results = load_jsonl_file(results_file)
@@ -310,15 +317,17 @@ if __name__ == "__main__":
         questions_batch_prompts = []
         questions_skip = []
         for j, q in enumerate(questions_batch):
+
             if prompt_op == "Generate":
                 q_prompt = q + GENERATE_PROMPT
             elif prompt_op == "GenerateCoT":
-                q_prompt = GENERATE_COT_PROMPT.format(code_task=q)
+                q_prompt = GENERATE_COT_PROMPT.format(code_task=q) if not ppa_op else GENERATE_COT_PROMPT_PPA.format(code_task=q)
             elif prompt_op == "ReAct":
                 q_prompt = REACT_PROMPT.format(code_task=q)
             elif prompt_op == "ReActSimple":
                 q_prompt = REACT_PROMPT_SIMPLE.format(code_task=q)
             
+
             q_skip = False
             if refine:
                 idx = i + j

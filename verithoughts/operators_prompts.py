@@ -18,6 +18,36 @@ You are the best Verilog designer I know pal! You can do this =)
 
 """
 
+GENERATE_COT_PROMPT_PPA = """
+ 
+{code_task}
+ 
+Make sure your input and output interface has the same names as described in the question.
+Please start your Verilog code with CODE BEGIN and end with CODE END.\n
+ 
+Make sure to optimize for PPA when possible! Some useful tips to consider to this end:
+ 
+* Minimize area by reducing flip-flops and limiting sequential logic.
+ 
+* Avoid registering outputs unless necessary.
+ 
+* Use fewer wide output buses.
+ 
+* Favor simple combinational logic and shared registers where possible.
+
+IMPORTANT: DO NOT OVERDO IT WITH PPA TWEAKS!! DO NOT OVER-TRY AT THE EXPENSE OF DESIGN CORRECTNESS.
+DESIGN CORRECTNESS! REMAINS THE PRIORITY WHICH MEANS, FIRST AND FOREMOST:
+
+* Might be useful to understand fully whether the task requires combinational or sequential logic. 
+
+* Also, always good to double-check that the interface (inputs/outputs) in your solution matches the names and bit widths described in the task.
+
+BEST ASSESS IF THE CODE TASK IS A GOOD FIT FOR PPA OPTIMIZATIONS BUT CORRECT DESIGN REMAINS THE GOAL!!!
+ 
+You are the best Verilog designer I know pal! You can do this =)
+ 
+"""
+
 INSTR_REASONING = "Make sure your input and output interface has the same names as described in the question. \nPlease start your Verilog code with CODE BEGIN and end with CODE END.<think>\n"
 
 REFINE_PROMPT = """

@@ -197,8 +197,10 @@ if __name__ == "__main__":
     parser.add_argument("--verilogeval", action="store_true", help="Enable if you have the verilogeval dataset")
     parser.add_argument("--refine", action="store_true", help="Enable if you want to refine that op")
     parser.add_argument("--self_refine", action="store_true", help="Enable if you want to use refine directly at runtime")
+    parser.add_argument("--ppa_op", action="store_true", help="Enable if you want to use the PPA optimize prompt")
     parser.add_argument("--syntax_check", action="store_true", help="Enable if you want to just check syntax w/o GTs")
     parser.add_argument("--cost_metrics", action="store_true", help="Enable if you want to just get LLM cost metrics w/o yosys")
+    parser.add_argument("--reprint", action="store_true", help="Enable if you have run eval already and you want to print metrics!")
     args = parser.parse_args()
 
     model_name = args.model_name
@@ -214,6 +216,13 @@ if __name__ == "__main__":
     self_refine = args.self_refine
     syntax_check = args.syntax_check
     cost_metrics = args.cost_metrics
+    reprint = args.reprint
+
+    ppa_op = args.ppa_op
+    if ppa_op:
+        if prompt_op != "GenerateCoT":
+            sys.stderr.write("[ERROR] PPA Prompting is supported as GenerateCoT variant. Relaunch with --prompt_op GenerateCoT\n")
+            raise SystemExit(1)
 
     if verilogeval: batch_size = 10 # 1GB yosys runs! wow!
     
@@ -240,7 +249,7 @@ if __name__ == "__main__":
     results_file, results_path = \
         get_results_filepath(model_name, num_samples, vllm_reasoning, 
                             use_vllm, prompt_op, benchmark_results_dest,
-                            refine, self_refine, openai_reasoning_effort)
+                            refine, self_refine, openai_reasoning_effort, ppa_op)
     results_data = load_jsonl(results_file)
     # Under that dir, have the tmp yosys files....
     tmpfiles_yosys_path = os.path.join(results_path, "tmp")
@@ -248,8 +257,9 @@ if __name__ == "__main__":
     # Same for yosys results ... c'mon....
     yosys_evals_basename = "yosys_syntax_checks.jsonl" if syntax_check else "yosys_evals.jsonl"
     yosys_evals_filename = os.path.join(results_path, yosys_evals_basename)
-    with open(yosys_evals_filename, "w") as f:
-        pass # reset! their code appends indefinitely! OMG!
+    if not reprint:
+        with open(yosys_evals_filename, "w") as f:
+            pass # reset! their code appends indefinitely! OMG!
 
 
     if cost_metrics:
@@ -272,49 +282,51 @@ if __name__ == "__main__":
         #     total_tokens = result_datapoint['total_tokens']
         sys.exit()
 
+    if not reprint:
 
-    loop = asyncio.get_event_loop()
-    num_batches = (len(results_data) + batch_size - 1) // batch_size
-    for i in tqdm(range(0, len(results_data), batch_size), total=num_batches, desc="Running yosys checks"):
+        loop = asyncio.get_event_loop()
+        num_batches = (len(results_data) + batch_size - 1) // batch_size
+        for i in tqdm(range(0, len(results_data), batch_size), total=num_batches, desc="Running yosys checks"):
 
-        results_batch = results_data[i : i + batch_size]
-        if syntax_check: 
-            batch_runs = [
-                yosys_syntax_check(tmpfiles_yosys_path, result['generated_code']) 
-                for result in results_batch
-            ]
-        else:
-            batch_runs = [
-                yosys_correctness_check(tmpfiles_yosys_path, result['generated_code'], result['ground_truth']) 
-                for result in results_batch
-            ]
-
-        yosys_checkresults = loop.run_until_complete(asyncio.gather(*batch_runs))
-
-        for j, yosys_checkresult in enumerate(yosys_checkresults):
-            idx = i + j
-            q_id = idx // num_samples
-            sample_id = idx % num_samples
+            results_batch = results_data[i : i + batch_size]
             if syntax_check: 
-                yosys_checkresult_dict = {
-                    "q_id": q_id,
-                    "sample_id": sample_id,
-                    "success": yosys_checkresult["success"],
-                    "return_code": yosys_checkresult["return_code"],
-                    "error_log": yosys_checkresult["error_log"],
-                }
+                batch_runs = [
+                    yosys_syntax_check(tmpfiles_yosys_path, result['generated_code']) 
+                    for result in results_batch
+                ]
             else:
-                yosys_checkresult_dict = {
-                    "q_id": q_id,
-                    "sample_id": sample_id,
-                    "success": yosys_checkresult["success"],
-                    "return_codes": yosys_checkresult["return_codes"],
-                    "module_success_list": yosys_checkresult["module_success_list"],
-                    "error_dict": yosys_checkresult["error_dict"],
-                }
+                batch_runs = [
+                    yosys_correctness_check(tmpfiles_yosys_path, result['generated_code'], result['ground_truth']) 
+                    for result in results_batch
+                ]
 
-            with open(yosys_evals_filename, "a") as f:
-                f.write(json.dumps(yosys_checkresult_dict) + "\n")
+            yosys_checkresults = loop.run_until_complete(asyncio.gather(*batch_runs))
+
+            for j, yosys_checkresult in enumerate(yosys_checkresults):
+                idx = i + j
+                q_id = idx // num_samples
+                sample_id = idx % num_samples
+                if syntax_check: 
+                    yosys_checkresult_dict = {
+                        "q_id": q_id,
+                        "sample_id": sample_id,
+                        "success": yosys_checkresult["success"],
+                        "return_code": yosys_checkresult["return_code"],
+                        "error_log": yosys_checkresult["error_log"],
+                    }
+                else:
+                    yosys_checkresult_dict = {
+                        "q_id": q_id,
+                        "sample_id": sample_id,
+                        "success": yosys_checkresult["success"],
+                        "return_codes": yosys_checkresult["return_codes"],
+                        "module_success_list": yosys_checkresult["module_success_list"],
+                        "error_dict": yosys_checkresult["error_dict"],
+                    }
+
+                with open(yosys_evals_filename, "a") as f:
+                    f.write(json.dumps(yosys_checkresult_dict) + "\n")
+
 
     yosys_results_dict = load_jsonl(yosys_evals_filename) # Oh my!!!
     correct_counts = []

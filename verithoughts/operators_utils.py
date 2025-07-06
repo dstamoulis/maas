@@ -156,7 +156,7 @@ def get_result_entry(results, q_id, sample_id):
 
 
 openai_reasoning_models = ['o4', 'o4-mini', 'o3', 'o3-mini'] # hardcoded!
-def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest, refine, self_refine, openai_reasoning_effort):
+def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prompt_op, benchmark_results_dest, refine, self_refine, openai_reasoning_effort, ppa_op=False):
     _names_list = [model_name, f"samples_{num_samples}"]
     if vllm_reasoning and use_vllm:
         _names_list.append("reasoning")
@@ -165,6 +165,7 @@ def get_results_filepath(model_name, num_samples, vllm_reasoning, use_vllm, prom
     _names_list.append(prompt_op)
     if self_refine: _names_list.append("SelfRefine")
     if refine: _names_list.append("Refine")
+    if ppa_op: _names_list.append("PPA")
     sub_folder = "-".join(_names_list)
     results_path = os.path.join(benchmark_results_dest, sub_folder)
     os.makedirs(results_path, exist_ok=True)

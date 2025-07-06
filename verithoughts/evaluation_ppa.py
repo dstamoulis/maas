@@ -362,6 +362,7 @@ if __name__ == "__main__":
     parser.add_argument("--self_refine", action="store_true", help="Enable if you want to use refine directly at runtime")
     parser.add_argument('--liberty', type=str, default="skywater-pdk/libraries/sky130_fd_sc_hd/latest/timing/sky130_fd_sc_hd__tt_025C_1v80.lib", help="Liberty file to use for synthesis")
     parser.add_argument('--target_clock_period', type=int, help="Target clock period in ns", default=20)
+    parser.add_argument("--ppa_op", action="store_true", help="Enable if you want to use the PPA optimize prompt")
     args = parser.parse_args()
 
     model_name = args.model_name
@@ -375,6 +376,11 @@ if __name__ == "__main__":
     verilogeval = args.verilogeval
     refine = args.refine
     self_refine = args.self_refine
+    ppa_op = args.ppa_op
+    if ppa_op:
+        if prompt_op != "GenerateCoT":
+            sys.stderr.write("[ERROR] PPA Prompting is supported as GenerateCoT variant. Relaunch with --prompt_op GenerateCoT\n")
+            raise SystemExit(1)
 
     target_clock_period = args.target_clock_period
     liberty = args.liberty
@@ -409,7 +415,7 @@ if __name__ == "__main__":
     results_file, results_path = \
         get_results_filepath(model_name, num_samples, vllm_reasoning, 
                             use_vllm, prompt_op, benchmark_results_dest,
-                            refine, self_refine, openai_reasoning_effort)
+                            refine, self_refine, openai_reasoning_effort, ppa_op)
     results_data = load_jsonl(results_file)
     # Under that dir, have the tmp yosys files....
     tmpfiles_yosys_path = os.path.join(results_path, "tmp_synth")
