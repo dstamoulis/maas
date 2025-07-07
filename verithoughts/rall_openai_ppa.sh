@@ -13,3 +13,7 @@ python3 evaluation_yosys.py --prompt_op GenerateCoT --num_samples 20 --self_refi
 python3 evaluation_ppa.py --prompt_op GenerateCoT --num_samples 20 --self_refine --ppa_op --model_name o4-mini
 python3 evaluation_ppa.py --prompt_op GenerateCoT --num_samples 20 --self_refine --ppa_op --model_name o4-mini --verilogeval 
 
+
+# Needed for GPT-4o mini c=20 VerilogEval!
+python3 evaluation_yosys.py --prompt_op GenerateCoT --num_samples 20 --self_refine --ppa_op --verilogeval
+python3 evaluation_ppa.py --prompt_op GenerateCoT --num_samples 20 --self_refine --verilogeval

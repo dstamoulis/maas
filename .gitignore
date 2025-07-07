@@ -26,6 +26,7 @@ verithoughts/skywater-pdk/
 verithoughts/skywater-pdk/*
 verithoughts/parser.out
 verithoughts/parsetab.py
+scp_server.sh
 
 !verithoughts/yosys_synth/tribuff_map.v
 !verithoughts/yosys_synth/latch_map.v

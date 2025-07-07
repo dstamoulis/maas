@@ -205,13 +205,13 @@ if __name__ == "__main__":
             static_power_ppa, static_power = result_synth_ppa['static_power'], result_synth['static_power']
 
             if result_synth['yosys_success'] and result_synth['sta_success']:
-                if not (area_ppa > 0 and delay_ppa > 0 and  static_power_ppa): continue
+                if not (area_ppa > 0 and delay_ppa > 0 and  static_power_ppa >0): continue
                 area_ppa_list_batch.append(area_ppa)
                 delay_ppa_list_batch.append(delay_ppa)
                 static_power_ppa_list_batch.append(static_power_ppa)
 
             if result_synth_ppa['yosys_success'] and result_synth_ppa['sta_success']:
-                if not (area > 0 and delay > 0 and  static_power): continue
+                if not (area > 0 and delay > 0 and  static_power >0): continue
                 area_list_batch.append(area)
                 delay_list_batch.append(delay)
                 static_power_list_batch.append(static_power)
@@ -222,7 +222,7 @@ if __name__ == "__main__":
 
         # if not (result['success'] and result_ppa['success']): continue        
         
-        if delta_area_batch < -5:
+        if delta_area_batch < 2: 
             area_list.extend(area_list_batch)
             delay_list.extend(delay_list_batch)
             static_power_list.extend(static_power_list_batch)

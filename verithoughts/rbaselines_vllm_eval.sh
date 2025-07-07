@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 rbatchsize=10
-rnumsamples=1
+rnumsamples=20
 rmodel="Qwen/Qwen2.5-14B"
 
 # VeriThought
